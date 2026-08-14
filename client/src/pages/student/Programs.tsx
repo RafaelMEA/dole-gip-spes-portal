@@ -9,7 +9,7 @@ import {
   Users,
 } from "lucide-react"
 import { fetchPrograms } from "@/api/programs"
-import { createApplication } from "@/api/student"
+import { createApplication, fetchMyApplications } from "@/api/student"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
 import { formatDate, formatMaxUploadSize } from "@/lib/format"
@@ -30,7 +30,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { CycleStatusBadge } from "@/components/StatusBadge"
 import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
-import type { Program, ProgramCycle } from "@/types/api"
+import type { Application, Program, ProgramCycle } from "@/types/api"
 
 function AvailabilityBadge({ cycle }: { cycle: ProgramCycle }) {
   if (cycle.is_accepting_applications) {
@@ -152,6 +152,11 @@ export function StudentProgramsPage() {
     [programs],
   )
 
+  async function findExistingApplication(cycleId: number): Promise<Application | null> {
+    const applications = await fetchMyApplications()
+    return applications.find((application) => application.program_cycle?.id === cycleId) ?? null
+  }
+
   async function handleApply() {
     if (!selected) return
     setSubmitting(true)
@@ -166,6 +171,27 @@ export function StudentProgramsPage() {
       setSelected(null)
       navigate(`/student/applications/${application.id}`)
     } catch (err) {
+      const apiErr = err instanceof ApiError ? err : null
+      const alreadyApplied = apiErr?.errors?.["program_cycle_id"]?.[0]?.includes(
+        "already have an application",
+      )
+      if (apiErr?.status === 422 && alreadyApplied) {
+        try {
+          const existing = await findExistingApplication(selected.cycle.id)
+          if (existing) {
+            toast({
+              title: "Application already exists",
+              description: "You already have an application for this cycle. Opening your draft.",
+              variant: "info",
+            })
+            setSelected(null)
+            navigate(`/student/applications/${existing.id}`)
+            return
+          }
+        } catch {
+          // Fall through to the generic error below.
+        }
+      }
       const message =
         err instanceof ApiError
           ? err.message

@@ -108,11 +108,19 @@ export interface DeploymentAssignment {
   applicant?: UserSummary | null
 }
 
+export interface DocumentRequirement {
+  id: number
+  name: string
+  description: string | null
+  allowed_file_types?: string[] | null
+  max_file_size?: number | null
+}
+
 export interface ApplicationDocument {
   id: number
   application_id: number
   requirement_id: number | null
-  requirement: string | null
+  requirement: DocumentRequirement | null
   file_name: string
   mime_type: string | null
   file_size: number

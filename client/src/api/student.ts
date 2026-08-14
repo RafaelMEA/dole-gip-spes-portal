@@ -1,4 +1,4 @@
-import { apiRequest, requestCsrfCookie } from "@/lib/api"
+import { apiRequest, apiUpload, requestCsrfCookie } from "@/lib/api"
 import type {
   ApiEnvelope,
   Application,
@@ -35,6 +35,22 @@ export async function createApplication(programCycleId: number): Promise<Applica
   return unwrap(response)
 }
 
+export interface ApplicationPayload {
+  remarks?: string | null
+}
+
+export async function updateApplication(
+  id: number,
+  payload: ApplicationPayload,
+): Promise<Application> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<Application>>(
+    `/api/student/applications/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  )
+  return unwrap(response)
+}
+
 export async function submitApplication(id: number, remarks?: string): Promise<Application> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<Application>>(
@@ -62,6 +78,7 @@ export async function uploadDocument(
   applicationId: number,
   requirementId: number | null,
   file: File,
+  onProgress?: (percent: number) => void,
 ): Promise<ApplicationDocument> {
   await requestCsrfCookie()
   const form = new FormData()
@@ -69,11 +86,12 @@ export async function uploadDocument(
   if (requirementId !== null) {
     form.append("requirement_id", String(requirementId))
   }
-  const response = await apiRequest<ApiEnvelope<ApplicationDocument>>(
+  const response = await apiUpload<ApiEnvelope<ApplicationDocument>>(
     `/api/student/applications/${applicationId}/documents`,
-    { method: "POST", body: form },
+    form,
+    onProgress,
   )
-  return unwrap(response)
+  return response.data
 }
 
 export async function deleteDocument(applicationId: number, documentId: number): Promise<void> {

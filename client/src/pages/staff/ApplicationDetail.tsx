@@ -368,7 +368,7 @@ export function StaffApplicationDetailPage() {
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="truncate text-sm font-medium">{document.requirement ?? document.file_name}</p>
+                        <p className="truncate text-sm font-medium">{document.requirement?.name ?? document.file_name}</p>
                         <DocumentStatusBadge status={document.verification_status} label={document.verification_label} />
                       </div>
                       <p className="text-xs text-muted-foreground">

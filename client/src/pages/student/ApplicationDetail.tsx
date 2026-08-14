@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -7,19 +7,28 @@ import {
   Loader2,
   MapPin,
   Paperclip,
+  Save,
   Send,
   Trash2,
   Upload,
   User,
 } from "lucide-react"
-import { deleteDocument, fetchApplication, submitApplication, uploadDocument, withdrawApplication } from "@/api/student"
+import {
+  deleteDocument,
+  fetchApplication,
+  submitApplication,
+  updateApplication,
+  uploadDocument,
+  withdrawApplication,
+} from "@/api/student"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
-import { formatDate, formatDateTime, formatFileSize } from "@/lib/format"
+import { formatDate, formatDateTime, formatFileSize, formatMaxUploadSize } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -38,7 +47,8 @@ import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
 import type { ApplicationDocument } from "@/types/api"
 
-const ACTIVE_STATUSES = ["submitted", "under_review", "documents_incomplete", "documents_verified", "approved", "for_deployment", "deployed"]
+const DEFAULT_ALLOWED_TYPES = ["pdf", "jpg", "jpeg", "png"]
+const DEFAULT_MAX_KB = 10240
 
 export function StudentApplicationDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -59,7 +69,48 @@ export function StudentApplicationDetailPage() {
   const [selectedRequirement, setSelectedRequirement] = useState<string>("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadLoading, setUploadLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const [remarks, setRemarks] = useState("")
+  const [remarksDirty, setRemarksDirty] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const syncedApplicationId = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (application && syncedApplicationId.current !== application.id) {
+      syncedApplicationId.current = application.id
+      setRemarks(application.remarks ?? "")
+      setRemarksDirty(false)
+    }
+  }, [application])
+
+  async function handleSaveDraft() {
+    setSaveLoading(true)
+    setSaveError(null)
+    try {
+      const saved = await updateApplication(applicationId, { remarks: remarks.trim() || null })
+      setRemarks(saved.remarks ?? "")
+      setRemarksDirty(false)
+      toast({
+        title: "Draft saved",
+        description: "Your application information has been saved.",
+        variant: "success",
+      })
+      await reload()
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : null
+      const message =
+        apiErr?.errors?.["remarks"]?.[0] ??
+        apiErr?.message ??
+        "Unable to save your application. Please try again."
+      setSaveError(message)
+      toast({ title: "Unable to save", description: message, variant: "error" })
+    } finally {
+      setSaveLoading(false)
+    }
+  }
 
   async function handleSubmit() {
     setActionLoading(true)
@@ -96,18 +147,26 @@ export function StudentApplicationDetailPage() {
       setUploadError("Please choose a file to upload.")
       return
     }
+    const validationError = validateSelectedFile()
+    if (validationError) {
+      setUploadError(validationError)
+      return
+    }
     setUploadLoading(true)
+    setUploadProgress(0)
     setUploadError(null)
     try {
       await uploadDocument(
         applicationId,
         selectedRequirement ? Number(selectedRequirement) : null,
         selectedFile,
+        setUploadProgress,
       )
       toast({ title: "Document uploaded", description: "Your document has been uploaded successfully.", variant: "success" })
       setUploadOpen(false)
       setSelectedFile(null)
       setSelectedRequirement("")
+      setUploadProgress(0)
       await reload()
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Upload failed. Please try again."
@@ -154,8 +213,49 @@ export function StudentApplicationDetailPage() {
   const cycle = application.program_cycle
   const canSubmit = application.status === "draft"
   const canWithdraw = application.status !== "withdrawn" && application.status !== "rejected" && application.status !== "completed"
-  const canUpload = ACTIVE_STATUSES.includes(application.status) || application.status === "draft"
+  const canUpload = ["draft", "submitted", "documents_incomplete"].includes(application.status)
+  const canEditInfo = application.status === "draft" || application.status === "documents_incomplete"
   const documents = application.documents ?? []
+  const requirements = cycle?.requirements ?? []
+  const requiredRequirements = requirements.filter((requirement) => requirement.is_required)
+  const uploadedRequiredCount = requiredRequirements.filter((requirement) =>
+    documents.some((document) => document.requirement_id === requirement.id),
+  ).length
+  const isDocumentEditable = application.status === "draft" || application.status === "documents_incomplete"
+
+  function selectedRequirementConfig() {
+    if (!selectedRequirement) return null
+    return requirements.find((requirement) => String(requirement.id) === selectedRequirement) ?? null
+  }
+
+  function allowedTypesFor(config: { allowed_file_types?: string[] | null } | null): string[] {
+    const types = config?.allowed_file_types?.length ? config.allowed_file_types : DEFAULT_ALLOWED_TYPES
+    return types.map((type) => type.toLowerCase())
+  }
+
+  function maxKbFor(config: { max_file_size?: number | null } | null): number {
+    return config?.max_file_size ?? DEFAULT_MAX_KB
+  }
+
+  function validateSelectedFile(): string | null {
+    if (!selectedFile) return "Please choose a file to upload."
+    const config = selectedRequirementConfig()
+    const allowed = allowedTypesFor(config)
+    const extension = selectedFile.name.split(".").pop()?.toLowerCase() ?? ""
+    if (!allowed.includes(extension)) {
+      return `Only ${allowed.join(", ")} files are accepted${config ? " for this requirement" : ""}.`
+    }
+    const maxKb = maxKbFor(config)
+    if (selectedFile.size > maxKb * 1024) {
+      return `This file is larger than the ${formatMaxUploadSize(maxKb)} limit.`
+    }
+    return null
+  }
+
+  const selectedFileValidation = selectedFile ? validateSelectedFile() : null
+  const replacingRequirement = selectedRequirement
+    ? documents.find((document) => document.requirement_id === Number(selectedRequirement))
+    : null
 
   return (
     <div className="space-y-6">
@@ -194,6 +294,64 @@ export function StudentApplicationDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {canEditInfo ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Application information</CardTitle>
+                <CardDescription>
+                  Details specific to this application. Your draft is saved so you can return later.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="application-remarks">Remarks (optional)</Label>
+                  <Textarea
+                    id="application-remarks"
+                    value={remarks}
+                    onChange={(event) => {
+                      setRemarks(event.target.value)
+                      setRemarksDirty(true)
+                    }}
+                    placeholder="Any additional notes for this application, such as preferred deployment area or availability."
+                    maxLength={5000}
+                    aria-invalid={saveError !== null}
+                    aria-describedby={saveError ? "application-remarks-error" : undefined}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {remarks.length}/5000
+                      {remarksDirty ? " · Unsaved changes" : " · All changes saved"}
+                    </p>
+                    {saveError ? (
+                      <p
+                        id="application-remarks-error"
+                        role="alert"
+                        className="text-xs font-medium text-destructive"
+                      >
+                        {saveError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={handleSaveDraft} disabled={saveLoading || remarks.length > 5000}>
+                    {saveLoading ? (
+                      <Loader2 className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Save aria-hidden="true" />
+                    )}
+                    {saveLoading ? "Saving..." : "Save draft"}
+                  </Button>
+                  {!remarksDirty && application.updated_at ? (
+                    <p className="text-xs text-muted-foreground">
+                      Last saved {formatDateTime(application.updated_at)}
+                    </p>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Status history</CardTitle>
@@ -209,24 +367,47 @@ export function StudentApplicationDetailPage() {
               <div className="space-y-1">
                 <CardTitle>Documents</CardTitle>
                 <CardDescription>
-                  {application.missing_required_documents.length > 0 ? (
-                    <span className="text-amber-600">
-                      {application.missing_required_documents.length} required document
-                      {application.missing_required_documents.length === 1 ? "" : "s"} still missing
-                    </span>
-                  ) : (
-                    "All required documents uploaded"
-                  )}
+                  {requiredRequirements.length > 0
+                    ? `${uploadedRequiredCount} of ${requiredRequirements.length} required documents uploaded`
+                    : "No required documents for this program"}
                 </CardDescription>
               </div>
               {canUpload ? (
-                <Button size="sm" onClick={() => setUploadOpen(true)}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setSelectedRequirement("")
+                    setSelectedFile(null)
+                    setUploadProgress(0)
+                    setUploadError(null)
+                    setUploadOpen(true)
+                  }}
+                >
                   <Upload aria-hidden="true" />
                   Upload
                 </Button>
               ) : null}
             </CardHeader>
             <CardContent className="space-y-2">
+              {requiredRequirements.length > 0 ? (
+                <div className="pb-2">
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={uploadedRequiredCount}
+                    aria-valuemin={0}
+                    aria-valuemax={requiredRequirements.length}
+                    aria-label="Required documents progress"
+                  >
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-[width]"
+                      style={{
+                        width: `${(uploadedRequiredCount / requiredRequirements.length) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
               {documents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
               ) : (
@@ -238,7 +419,12 @@ export function StudentApplicationDetailPage() {
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="truncate text-sm font-medium">{document.requirement ?? document.file_name}</p>
+                        <p className="truncate text-sm font-medium">
+                          {document.requirement?.name ?? document.file_name}
+                        </p>
+                        {requirements.find((requirement) => requirement.id === document.requirement_id)?.is_required ? (
+                          <Badge variant="secondary">Required</Badge>
+                        ) : null}
                         <DocumentStatusBadge status={document.verification_status} label={document.verification_label} />
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -258,7 +444,8 @@ export function StudentApplicationDetailPage() {
                         <Download aria-hidden="true" />
                         Download
                       </Button>
-                      {application.status === "draft" || application.status === "documents_incomplete" ? (
+                      {isDocumentEditable &&
+                      (document.verification_status === "pending" || document.verification_status === "rejected") ? (
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -301,7 +488,7 @@ export function StudentApplicationDetailPage() {
                 <CalendarRange className="size-4" aria-hidden="true" />
                 {formatDate(cycle?.application_start)} – {formatDate(cycle?.application_deadline)}
               </div>
-              {application.remarks ? (
+              {!canEditInfo && application.remarks ? (
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Remarks</p>
                   <p className="mt-0.5 text-muted-foreground">{application.remarks}</p>
@@ -426,7 +613,7 @@ export function StudentApplicationDetailPage() {
           <DialogHeader>
             <DialogTitle>Upload document</DialogTitle>
             <DialogDescription>
-              PDF, JPG, JPEG, or PNG files up to 10 MB. Allowed only while your application is in progress.
+              Attach a requirement document or another supporting file. Uploading again for the same type replaces the previous file.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -437,23 +624,62 @@ export function StudentApplicationDetailPage() {
                   <SelectValue placeholder="Select a requirement (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(cycle?.requirements ?? []).map((requirement) => (
+                  {requirements.map((requirement) => (
                     <SelectItem key={requirement.id} value={String(requirement.id)}>
                       {requirement.name}
+                      {requirement.is_required ? " · Required" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedRequirement ? (
+                <p className="text-xs text-muted-foreground">
+                  {allowedTypesFor(selectedRequirementConfig()).join(", ").toUpperCase()} files up to{" "}
+                  {formatMaxUploadSize(maxKbFor(selectedRequirementConfig()))}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to attach an unlisted document (PDF, JPG, JPEG, or PNG up to 10 MB).
+                </p>
+              )}
+              {replacingRequirement ? (
+                <p className="text-xs font-medium text-amber-600">
+                  A document for this type already exists and will be replaced.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="file-upload">File</Label>
               <Input
                 id="file-upload"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept={allowedTypesFor(selectedRequirementConfig()).map((type) => `.${type}`).join(",")}
                 onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               />
+              {selectedFile ? (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <p className="truncate font-medium">{selectedFile.name}</p>
+                  <p className={selectedFileValidation ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                    {selectedFileValidation ?? `${formatFileSize(selectedFile.size)} · Ready to upload`}
+                  </p>
+                </div>
+              ) : null}
             </div>
+            {uploadLoading ? (
+              <div className="space-y-1">
+                <div
+                  className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-valuenow={uploadProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Upload progress"
+                >
+                  <div className="h-full bg-primary transition-[width]" style={{ width: `${uploadProgress}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground">{uploadProgress}% uploaded</p>
+              </div>
+            ) : null}
             {uploadError ? (
               <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {uploadError}
@@ -464,9 +690,9 @@ export function StudentApplicationDetailPage() {
             <Button variant="outline" onClick={() => setUploadOpen(false)} disabled={uploadLoading}>
               Cancel
             </Button>
-            <Button onClick={handleUpload} disabled={uploadLoading || !selectedFile}>
+            <Button onClick={handleUpload} disabled={uploadLoading || !selectedFile || selectedFileValidation !== null}>
               {uploadLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
-              Upload
+              {uploadLoading ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>
         </DialogContent>

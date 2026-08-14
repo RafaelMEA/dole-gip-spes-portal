@@ -92,3 +92,48 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 
   return payload as T
 }
+
+/**
+ * Upload a file via XMLHttpRequest so progress can be reported while the
+ * browser pushes bytes to the server. Cookie credentials and the XSRF token
+ * are sent exactly like the regular fetch-based helper.
+ */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void,
+): Promise<T> {
+  const xsrfToken = getCookie("XSRF-TOKEN")
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${API_URL}${path}`)
+    xhr.withCredentials = true
+    xhr.responseType = "json"
+    xhr.setRequestHeader("Accept", "application/json")
+    if (xsrfToken) {
+      xhr.setRequestHeader("X-XSRF-TOKEN", xsrfToken)
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+      }
+    }
+
+    xhr.onerror = () =>
+      reject(new ApiError("Unable to reach the server. Please check your connection.", 0))
+    xhr.onabort = () => reject(new ApiError("The upload was cancelled.", 0))
+
+    xhr.onload = () => {
+      const payload = (xhr.response as ApiResponseBody | null) ?? null
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve((payload ?? {}) as T)
+      } else {
+        reject(new ApiError(errorMessage(xhr.status, payload), xhr.status, payload?.errors))
+      }
+    }
+
+    xhr.send(formData)
+  })
+}

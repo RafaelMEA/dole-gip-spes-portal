@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Application;
+use App\Models\ApplicationDocument;
 use App\Models\ProgramCycle;
 use App\Models\Requirement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,9 +43,9 @@ class DocumentFlowTest extends TestCase
             ])
             ->assertStatus(201)
             ->assertJsonPath('data.verification_status', 'pending')
-            ->assertJsonPath('data.requirement', $requirement->name);
+            ->assertJsonPath('data.requirement.name', $requirement->name);
 
-        $document = \App\Models\ApplicationDocument::firstOrFail();
+        $document = ApplicationDocument::firstOrFail();
         Storage::disk('docs')->assertExists($document->file_path);
     }
 

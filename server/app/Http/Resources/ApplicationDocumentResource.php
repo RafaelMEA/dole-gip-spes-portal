@@ -4,7 +4,6 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class ApplicationDocumentResource extends JsonResource
 {
@@ -17,7 +16,15 @@ class ApplicationDocumentResource extends JsonResource
             'id' => $this->id,
             'application_id' => $this->application_id,
             'requirement_id' => $this->requirement_id,
-            'requirement' => $this->whenLoaded('requirement', fn () => $this->requirement?->name),
+            'requirement' => $this->whenLoaded('requirement', fn () => $this->requirement
+                ? [
+                    'id' => $this->requirement->id,
+                    'name' => $this->requirement->name,
+                    'description' => $this->requirement->description,
+                    'allowed_file_types' => $this->requirement->allowed_file_types,
+                    'max_file_size' => $this->requirement->max_file_size,
+                ]
+                : null),
             'file_name' => $this->file_name,
             'mime_type' => $this->mime_type,
             'file_size' => $this->file_size,

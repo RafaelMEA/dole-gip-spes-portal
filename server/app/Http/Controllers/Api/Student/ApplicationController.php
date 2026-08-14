@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Student;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreApplicationRequest;
+use App\Http\Requests\UpdateApplicationRequest;
 use App\Http\Resources\ApplicationResource;
 use App\Models\Application;
 use App\Services\ApplicationService;
@@ -15,8 +16,7 @@ class ApplicationController extends Controller
 {
     public function __construct(
         private readonly ApplicationService $applications,
-    ) {
-    }
+    ) {}
 
     /**
      * List the authenticated student's applications.
@@ -69,6 +69,18 @@ class ApplicationController extends Controller
         ]);
 
         return new ApplicationResource($application);
+    }
+
+    /**
+     * Update an owned draft application.
+     */
+    public function update(UpdateApplicationRequest $request, Application $application)
+    {
+        $this->authorize('update', $application);
+
+        $application->fill($request->validated())->save();
+
+        return new ApplicationResource($application->load(['programCycle.program']));
     }
 
     /**

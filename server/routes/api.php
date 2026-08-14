@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DocumentDownloadController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramCycleController;
@@ -12,7 +13,6 @@ use App\Http\Controllers\Api\Student\ApplicationController as StudentApplication
 use App\Http\Controllers\Api\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Api\Student\DocumentController as StudentDocumentController;
 use App\Http\Controllers\Api\Student\ProfileController;
-use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/applications', [StudentApplicationController::class, 'index']);
         Route::post('/applications', [StudentApplicationController::class, 'store']);
         Route::get('/applications/{application}', [StudentApplicationController::class, 'show']);
+        Route::put('/applications/{application}', [StudentApplicationController::class, 'update']);
+        Route::patch('/applications/{application}', [StudentApplicationController::class, 'update']);
         Route::post('/applications/{application}/submit', [StudentApplicationController::class, 'submit']);
         Route::post('/applications/{application}/withdraw', [StudentApplicationController::class, 'withdraw']);
         Route::delete('/applications/{application}', [StudentApplicationController::class, 'destroy']);
