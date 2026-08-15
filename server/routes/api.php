@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/applications/{application}', [StudentApplicationController::class, 'show']);
         Route::put('/applications/{application}', [StudentApplicationController::class, 'update']);
         Route::patch('/applications/{application}', [StudentApplicationController::class, 'update']);
+        Route::get('/applications/{application}/completeness', [StudentApplicationController::class, 'completeness']);
         Route::post('/applications/{application}/submit', [StudentApplicationController::class, 'submit']);
         Route::post('/applications/{application}/withdraw', [StudentApplicationController::class, 'withdraw']);
         Route::delete('/applications/{application}', [StudentApplicationController::class, 'destroy']);

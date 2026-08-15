@@ -16,6 +16,7 @@ import { StaffDashboardPage } from "@/pages/staff/Dashboard"
 import { StaffDeploymentsPage } from "@/pages/staff/Deployments"
 import { StaffReviewQueuePage } from "@/pages/staff/ReviewQueue"
 import { StudentApplicationDetailPage } from "@/pages/student/ApplicationDetail"
+import { StudentApplicationReviewPage } from "@/pages/student/ApplicationReview"
 import { StudentApplicationsPage } from "@/pages/student/Applications"
 import { StudentDashboardPage } from "@/pages/student/Dashboard"
 import { StudentProfilePage } from "@/pages/student/Profile"
@@ -59,6 +60,7 @@ function App() {
           <Route path="/student/programs" element={<StudentProgramsPage />} />
           <Route path="/student/applications" element={<StudentApplicationsPage />} />
           <Route path="/student/applications/:id" element={<StudentApplicationDetailPage />} />
+          <Route path="/student/applications/:id/review" element={<StudentApplicationReviewPage />} />
           <Route path="/student/profile" element={<StudentProfilePage />} />
         </Route>
 

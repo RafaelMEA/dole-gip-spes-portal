@@ -6,6 +6,8 @@ import {
   CalendarRange,
   CheckCircle2,
   Download,
+  FileText,
+  GraduationCap,
   Loader2,
   Mail,
   MapPin,
@@ -371,8 +373,12 @@ export function StaffApplicationDetailPage() {
                         <p className="truncate text-sm font-medium">{document.requirement?.name ?? document.file_name}</p>
                         <DocumentStatusBadge status={document.verification_status} label={document.verification_label} />
                       </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {document.file_name} · {document.mime_type ?? "file"} · {formatFileSize(document.file_size)}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {document.file_name} · {formatFileSize(document.file_size)}
+                        Uploaded {formatDateTime(document.uploaded_at)}
+                        {document.verified_at ? ` · Verified ${formatDateTime(document.verified_at)}` : ""}
                       </p>
                       {document.verification_status === "rejected" && document.rejection_reason ? (
                         <p className="text-xs text-red-600">Rejected: {document.rejection_reason}</p>
@@ -450,9 +456,60 @@ export function StaffApplicationDetailPage() {
                 <p>{application.applicant?.email ?? "—"}</p>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
+                <GraduationCap className="size-4 shrink-0" aria-hidden="true" />
+                <div>
+                  <p>{application.applicant?.student_detail?.school_name ?? "—"}</p>
+                  {application.applicant?.student_detail?.course ||
+                  application.applicant?.student_detail?.year_level ? (
+                    <p className="text-xs">
+                      {[application.applicant.student_detail?.course, application.applicant.student_detail?.year_level]
+                        .filter(Boolean)
+                        .map((part) => (typeof part === "number" ? `Year ${part}` : part))
+                        .join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <CalendarRange className="size-4 shrink-0" aria-hidden="true" />
                 <p>Submitted {formatDateTime(application.submitted_at ?? application.created_at)}</p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Application
+                <ApplicationStatusBadge status={application.status} label={application.status_label} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <FileText className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</p>
+                  <p className="mt-0.5 capitalize text-foreground">{application.status_label}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Submitted</p>
+                <p className="mt-0.5">{formatDateTime(application.submitted_at ?? application.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Created</p>
+                <p className="mt-0.5">{formatDateTime(application.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last updated</p>
+                <p className="mt-0.5">{formatDateTime(application.updated_at)}</p>
+              </div>
+              {application.remarks ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Remarks</p>
+                  <p className="mt-0.5 text-muted-foreground">{application.remarks}</p>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

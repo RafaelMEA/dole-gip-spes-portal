@@ -10,6 +10,8 @@ import type {
   Program,
   ProgramCycle,
   Requirement,
+  StaffApplicationFilters,
+  StaffApplicationListResponse,
   StaffDashboardData,
 } from "@/types/api"
 
@@ -22,23 +24,19 @@ export async function fetchStaffDashboard(): Promise<StaffDashboardData> {
   return unwrap(response)
 }
 
-export interface ReviewQuery {
-  status?: string
-  program_cycle_id?: string
-  search?: string
-  page?: number
-  per_page?: number
+function serializeQuery(query: StaffApplicationFilters): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value))
+    }
+  }
+  return params
 }
 
-export async function fetchReviewQueue(query: ReviewQuery = {}): Promise<Paginated<Application>> {
-  const params = new URLSearchParams()
-  if (query.status) params.set("status", query.status)
-  if (query.program_cycle_id) params.set("program_cycle_id", query.program_cycle_id)
-  if (query.search) params.set("search", query.search)
-  if (query.page) params.set("page", String(query.page))
-  if (query.per_page) params.set("per_page", String(query.per_page))
-  const qs = params.toString()
-  const response = await apiRequest<Paginated<Application>>(
+export async function fetchReviewQueue(query: StaffApplicationFilters = {}): Promise<StaffApplicationListResponse> {
+  const qs = serializeQuery(query).toString()
+  const response = await apiRequest<StaffApplicationListResponse>(
     `/api/staff/applications${qs ? `?${qs}` : ""}`,
   )
   return response

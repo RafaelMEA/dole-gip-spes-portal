@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ApplicationStatus;
+use App\Exceptions\IncompleteApplicationException;
 use App\Models\Application;
 use App\Models\User;
 use DomainException;
@@ -10,6 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class ApplicationService
 {
+    public function __construct(
+        private readonly ApplicationCompletenessService $completeness,
+    ) {
+    }
+
     /**
      * The state machine: [from => [to, ...]].
      *
@@ -109,6 +115,14 @@ class ApplicationService
      */
     public function submit(Application $application, User $user, ?string $remarks = null): Application
     {
+        if (! $this->canTransition($application, $user, 'submit')) {
+            throw new DomainException(
+                "The application cannot move from \"{$application->status->value}\" via \"submit\".",
+            );
+        }
+
+        $this->assertEligibleForSubmission($application);
+
         return $this->transition($application, $user, 'submit', $remarks);
     }
 
@@ -170,6 +184,39 @@ class ApplicationService
     public function complete(Application $application, User $user, ?string $remarks = null): Application
     {
         return $this->transition($application, $user, 'complete', $remarks);
+    }
+
+    /**
+     * Verify the application can still be submitted right now:
+     *
+     * 1. The program cycle must still be accepting applications. The backend
+     *    is authoritative here; a cycle that has closed (or was never
+     *    published) blocks submission even if the application is still a
+     *    draft.
+     * 2. The application must be complete (required profile information and
+     *    every required document present and valid). Optional documents never
+     *    block submission.
+     *
+     * These checks are re-run on every submission request; a prior
+     * completeness GET is never trusted.
+     */
+    private function assertEligibleForSubmission(Application $application): void
+    {
+        if (! $application->programCycle->isAcceptingApplications()) {
+            throw new DomainException('The application period for this program has closed.');
+        }
+
+        $missingApplicationFields = $this->completeness->missingApplicationFields($application);
+        $missingRequirements = $this->completeness->missingRequirements($application);
+
+        if ($missingApplicationFields === [] && $missingRequirements === []) {
+            return;
+        }
+
+        throw new IncompleteApplicationException(
+            missingApplicationFields: $missingApplicationFields,
+            missingRequirements: $missingRequirements,
+        );
     }
 
     /**

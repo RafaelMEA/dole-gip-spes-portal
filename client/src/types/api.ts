@@ -56,13 +56,38 @@ export interface Program {
   cycles?: ProgramCycle[]
 }
 
+export interface StudentDetailSummary {
+  school_name: string | null
+  course: string | null
+  year_level: string | number | null
+}
+
 export interface UserSummary {
   id: number
   name: string
   email: string
   role: "student" | "staff"
   created_at?: string
+  student_detail?: StudentDetailSummary | null
 }
+
+export type ApplicationSortField = "submitted_at" | "created_at" | "updated_at"
+export type SortDirection = "asc" | "desc"
+
+export interface StaffApplicationFilters {
+  status?: string
+  program_id?: number
+  program_cycle_id?: number
+  search?: string
+  submitted_from?: string
+  submitted_to?: string
+  sort?: ApplicationSortField
+  direction?: SortDirection
+  page?: number
+  per_page?: number
+}
+
+export type StaffApplicationListResponse = Paginated<Application>
 
 export interface StatusHistoryItem {
   id: number
@@ -132,6 +157,22 @@ export interface ApplicationDocument {
   verified_by: string | null
   download_url: string
 }
+
+export interface MissingRequirement {
+  id: number
+  name: string
+  is_required: boolean
+}
+
+export interface ApplicationCompleteness {
+  is_complete: boolean
+  application_complete: boolean
+  documents_complete: boolean
+  missing_application_fields: string[]
+  missing_requirements: MissingRequirement[]
+}
+
+export type ApplicationSubmissionResponse = Application
 
 export interface Application {
   id: number

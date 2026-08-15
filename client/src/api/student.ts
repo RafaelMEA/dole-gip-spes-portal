@@ -2,7 +2,9 @@ import { apiRequest, apiUpload, requestCsrfCookie } from "@/lib/api"
 import type {
   ApiEnvelope,
   Application,
+  ApplicationCompleteness,
   ApplicationDocument,
+  ApplicationSubmissionResponse,
   StudentDashboardData,
   StudentProfile,
 } from "@/types/api"
@@ -23,6 +25,13 @@ export async function fetchMyApplications(): Promise<Application[]> {
 
 export async function fetchApplication(id: number): Promise<Application> {
   const response = await apiRequest<ApiEnvelope<Application>>(`/api/student/applications/${id}`)
+  return unwrap(response)
+}
+
+export async function fetchApplicationCompleteness(id: number): Promise<ApplicationCompleteness> {
+  const response = await apiRequest<ApiEnvelope<ApplicationCompleteness>>(
+    `/api/student/applications/${id}/completeness`,
+  )
   return unwrap(response)
 }
 
@@ -51,9 +60,12 @@ export async function updateApplication(
   return unwrap(response)
 }
 
-export async function submitApplication(id: number, remarks?: string): Promise<Application> {
+export async function submitApplication(
+  id: number,
+  remarks?: string,
+): Promise<ApplicationSubmissionResponse> {
   await requestCsrfCookie()
-  const response = await apiRequest<ApiEnvelope<Application>>(
+  const response = await apiRequest<ApiEnvelope<ApplicationSubmissionResponse>>(
     `/api/student/applications/${id}/submit`,
     { method: "POST", body: JSON.stringify({ remarks }) },
   )

@@ -20,6 +20,11 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'role' => $this->role,
             'created_at' => $this->created_at?->toISOString(),
+            'student_detail' => $this->whenLoaded('studentDetail', fn () => $this->studentDetail ? [
+                'school_name' => $this->studentDetail->school_name,
+                'course' => $this->studentDetail->course,
+                'year_level' => $this->studentDetail->year_level,
+            ] : null),
         ];
     }
 }

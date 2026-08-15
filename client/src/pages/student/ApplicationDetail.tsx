@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
   ArrowLeft,
+  BadgeCheck,
   CalendarRange,
+  ClipboardCheck,
   Download,
   Loader2,
   MapPin,
   Paperclip,
   Save,
-  Send,
   Trash2,
   Upload,
   User,
@@ -16,7 +17,6 @@ import {
 import {
   deleteDocument,
   fetchApplication,
-  submitApplication,
   updateApplication,
   uploadDocument,
   withdrawApplication,
@@ -58,7 +58,6 @@ export function StudentApplicationDetailPage() {
   const fetcher = useCallback(() => fetchApplication(applicationId), [applicationId])
   const { data: application, loading, error, reload } = useAsync(fetcher)
 
-  const [submitOpen, setSubmitOpen] = useState(false)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ApplicationDocument | null>(null)
@@ -109,21 +108,6 @@ export function StudentApplicationDetailPage() {
       toast({ title: "Unable to save", description: message, variant: "error" })
     } finally {
       setSaveLoading(false)
-    }
-  }
-
-  async function handleSubmit() {
-    setActionLoading(true)
-    try {
-      await submitApplication(applicationId, actionRemarks.trim() || undefined)
-      toast({ title: "Application submitted", description: "Your application is now under review.", variant: "success" })
-      setSubmitOpen(false)
-      setActionRemarks("")
-      await reload()
-    } catch (err) {
-      toast({ title: "Unable to submit", description: err instanceof ApiError ? err.message : "Please try again.", variant: "error" })
-    } finally {
-      setActionLoading(false)
     }
   }
 
@@ -211,9 +195,9 @@ export function StudentApplicationDetailPage() {
   if (!application) return null
 
   const cycle = application.program_cycle
-  const canSubmit = application.status === "draft"
+  const canReview = application.status === "draft"
   const canWithdraw = application.status !== "withdrawn" && application.status !== "rejected" && application.status !== "completed"
-  const canUpload = ["draft", "submitted", "documents_incomplete"].includes(application.status)
+  const canUpload = ["draft", "documents_incomplete"].includes(application.status)
   const canEditInfo = application.status === "draft" || application.status === "documents_incomplete"
   const documents = application.documents ?? []
   const requirements = cycle?.requirements ?? []
@@ -265,10 +249,10 @@ export function StudentApplicationDetailPage() {
           Back to applications
         </Button>
         <div className="flex items-center gap-2">
-          {canSubmit ? (
-            <Button onClick={() => setSubmitOpen(true)}>
-              <Send aria-hidden="true" />
-              Submit application
+          {canReview ? (
+            <Button nativeButton={false} render={<Link to={`/student/applications/${applicationId}/review`} />}>
+              <ClipboardCheck aria-hidden="true" />
+              Review & submit
             </Button>
           ) : null}
           {canWithdraw ? (
@@ -290,6 +274,24 @@ export function StudentApplicationDetailPage() {
         <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error.message}
         </p>
+      ) : null}
+
+      {application.status === "submitted" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BadgeCheck className="size-5 text-emerald-600" aria-hidden="true" />
+              Application submitted
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p>Your application has been submitted successfully and is awaiting review.</p>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Submitted</p>
+              <p className="mt-0.5">{formatDate(application.submitted_at)}</p>
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -549,35 +551,6 @@ export function StudentApplicationDetailPage() {
           ) : null}
         </div>
       </div>
-
-      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit application</DialogTitle>
-            <DialogDescription>
-              Once submitted, your application will be reviewed by DOLE staff. You can still add documents afterward.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="submit-remarks">Remarks (optional)</Label>
-            <Textarea
-              id="submit-remarks"
-              value={actionRemarks}
-              onChange={(event) => setActionRemarks(event.target.value)}
-              placeholder="Any additional notes for the reviewer..."
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={actionLoading}>
-              {actionLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
         <DialogContent>

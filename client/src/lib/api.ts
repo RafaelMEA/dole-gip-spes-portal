@@ -3,18 +3,26 @@ const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 
 export class ApiError extends Error {
   readonly status: number
   readonly errors: Record<string, string[]> | undefined
+  readonly payload: Record<string, unknown> | undefined
 
-  constructor(message: string, status: number, errors?: Record<string, string[]>) {
+  constructor(
+    message: string,
+    status: number,
+    errors?: Record<string, string[]>,
+    payload?: Record<string, unknown> | null,
+  ) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.errors = errors
+    this.payload = payload ?? undefined
   }
 }
 
 interface ApiResponseBody {
   message?: string
   errors?: Record<string, string[]>
+  data?: unknown
 }
 
 const DEFAULT_ERRORS: Record<number, string> = {
@@ -83,7 +91,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   const payload = await readBody(response)
 
   if (!response.ok) {
-    throw new ApiError(errorMessage(response.status, payload), response.status, payload?.errors)
+    throw new ApiError(errorMessage(response.status, payload), response.status, payload?.errors, payload as Record<string, unknown>)
   }
 
   if (response.status === 204) {
@@ -130,7 +138,9 @@ export async function apiUpload<T>(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve((payload ?? {}) as T)
       } else {
-        reject(new ApiError(errorMessage(xhr.status, payload), xhr.status, payload?.errors))
+        reject(
+          new ApiError(errorMessage(xhr.status, payload), xhr.status, payload?.errors, payload as Record<string, unknown>),
+        )
       }
     }
 

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\Student;
 
 use App\Http\Controllers\Controller;
+use App\Exceptions\IncompleteApplicationException;
 use App\Http\Requests\StoreApplicationRequest;
 use App\Http\Requests\UpdateApplicationRequest;
 use App\Http\Resources\ApplicationResource;
 use App\Models\Application;
+use App\Services\ApplicationCompletenessService;
 use App\Services\ApplicationService;
 use DomainException;
 use Illuminate\Http\Request;
@@ -16,6 +18,7 @@ class ApplicationController extends Controller
 {
     public function __construct(
         private readonly ApplicationService $applications,
+        private readonly ApplicationCompletenessService $completeness,
     ) {}
 
     /**
@@ -84,6 +87,20 @@ class ApplicationController extends Controller
     }
 
     /**
+     * The student-facing completeness summary for one of the student's
+     * applications. This is advisory for UX; the backend re-validates
+     * everything during submission.
+     */
+    public function completeness(Application $application)
+    {
+        $this->authorize('view', $application);
+
+        return response()->json([
+            'data' => $this->completeness->summarize($application),
+        ]);
+    }
+
+    /**
      * Submit a draft application for review.
      */
     public function submit(Application $application, Request $request)
@@ -92,6 +109,25 @@ class ApplicationController extends Controller
 
         try {
             $this->applications->submit($application, $request->user(), $request->input('remarks'));
+        } catch (IncompleteApplicationException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [
+                    'application' => $e->missingApplicationFields() === []
+                        ? []
+                        : ['Required application information is incomplete: '.implode(', ', $e->missingApplicationFields()).'.'],
+                    'documents' => $e->missingRequirements() === []
+                        ? []
+                        : ['Missing required documents: '.implode(', ', array_column($e->missingRequirements(), 'name')).'.'],
+                ],
+                'data' => [
+                    'is_complete' => false,
+                    'application_complete' => $e->missingApplicationFields() === [],
+                    'documents_complete' => $e->missingRequirements() === [],
+                    'missing_application_fields' => $e->missingApplicationFields(),
+                    'missing_requirements' => $e->missingRequirements(),
+                ],
+            ], 422);
         } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

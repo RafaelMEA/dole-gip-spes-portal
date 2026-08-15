@@ -15,7 +15,9 @@ class ApplicationDocumentPolicy
 
     /**
      * Students may upload documents to an application that is still in a
-     * student-editable state.
+     * student-editable state. Once an application has been submitted it is
+     * immutable from the student's perspective: no new uploads and no
+     * replacements are allowed.
      */
     public function create(User $user, ?int $applicationId = null): bool
     {
@@ -33,7 +35,6 @@ class ApplicationDocumentPolicy
             && $application->applicant_id === $user->id
             && in_array($application->status, [
                 ApplicationStatus::Draft,
-                ApplicationStatus::Submitted,
                 ApplicationStatus::DocumentsIncomplete,
             ], true);
     }

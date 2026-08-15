@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api\Staff;
 
+use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ListApplicationsRequest;
 use App\Http\Requests\ReviewApplicationRequest;
 use App\Http\Resources\ApplicationResource;
+use App\Http\Resources\ApplicationResourceCollection;
 use App\Models\Application;
 use App\Services\ApplicationService;
 use DomainException;
@@ -18,22 +21,65 @@ class ApplicationController extends Controller
     }
 
     /**
-     * The review queue, filterable by status, cycle, and applicant name.
+     * The staff application dashboard: searchable, filterable, sortable and
+     * paginated. The default view prioritises submitted applications, newest
+     * submitted first.
      */
-    public function index(Request $request)
+    public function index(ListApplicationsRequest $request)
     {
         $this->authorize('viewAny', Application::class);
 
-        $query = Application::with(['applicant', 'programCycle.program'])
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
-            ->when($request->filled('program_cycle_id'), fn ($q) => $q->where('program_cycle_id', $request->input('program_cycle_id')))
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $term = $request->input('search');
-                $q->whereHas('applicant', fn ($a) => $a->where('name', 'like', "%{$term}%"));
-            })
-            ->orderByDesc('created_at');
+        $status = $request->validated('status');
+        $sort = $request->validated('sort') ?? 'submitted_at';
+        $direction = $request->validated('direction') ?? 'desc';
 
-        return ApplicationResource::collection($query->paginate($request->integer('per_page', 15)));
+        $query = Application::with(['applicant', 'programCycle.program']);
+
+        if ($status === null) {
+            // Default view: submitted applications, newest first.
+            $query->where('status', ApplicationStatus::Submitted->value);
+        } elseif ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $query
+            ->when($request->filled('program_id'), function ($q) use ($request) {
+                $q->whereHas('programCycle', fn ($cycle) => $cycle->where('program_id', $request->integer('program_id')));
+            })
+            ->when($request->filled('program_cycle_id'), function ($q) use ($request) {
+                $q->where('program_cycle_id', $request->integer('program_cycle_id'));
+            })
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $term = trim((string) $request->validated('search'));
+
+                if ($term === '') {
+                    return;
+                }
+
+                $pattern = '%'.self::escapeLike($term).'%';
+
+                $q->where(function ($inner) use ($pattern, $term) {
+                    $inner->whereHas('applicant', fn ($applicant) => $applicant
+                        ->where('name', 'like', $pattern)
+                        ->orWhere('email', 'like', $pattern));
+
+                    if (ctype_digit($term)) {
+                        $inner->orWhere('applications.id', (int) $term);
+                    }
+                });
+            })
+            ->when($request->filled('submitted_from'), function ($q) use ($request) {
+                $q->whereDate('submitted_at', '>=', $request->validated('submitted_from'));
+            })
+            ->when($request->filled('submitted_to'), function ($q) use ($request) {
+                $q->whereDate('submitted_at', '<=', $request->validated('submitted_to'));
+            })
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction === 'asc' ? 'asc' : 'desc');
+
+        return new ApplicationResourceCollection(
+            $query->paginate($request->validated('per_page') ?? 20)->withQueryString(),
+        );
     }
 
     /**
@@ -89,5 +135,14 @@ class ApplicationController extends Controller
             'statusHistory.changedBy',
             'deploymentAssignment',
         ]));
+    }
+
+    /**
+     * Escape LIKE wildcards so user-supplied search terms are matched
+     * literally instead of acting as SQL wildcards.
+     */
+    private static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 }

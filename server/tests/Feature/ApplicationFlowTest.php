@@ -8,9 +8,12 @@ use App\Models\DeploymentAssignment;
 use App\Models\HostAgency;
 use App\Models\ProgramCycle;
 use App\Models\Requirement;
+use App\Models\StudentDetail;
 use App\Models\User;
 use Database\Factories\ProgramCycleFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\SpaAuthentication;
 use Tests\TestCase;
 
@@ -94,14 +97,25 @@ class ApplicationFlowTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_a_student_can_submit_their_draft_application(): void
+    public function test_a_student_can_submit_their_complete_draft_application(): void
     {
         $student = $this->loginAsStudent();
+        StudentDetail::factory()->create(['user_id' => $student->id]);
+
         $cycle = $this->openCycleWithRequirements();
         $application = Application::factory()->create([
             'applicant_id' => $student->id,
             'program_cycle_id' => $cycle->id,
         ]);
+
+        Storage::fake('docs');
+        foreach ($cycle->requirements as $requirement) {
+            $this->fromSpa()
+                ->postJson('/api/student/applications/'.$application->id.'/documents', [
+                    'requirement_id' => $requirement->id,
+                    'file' => UploadedFile::fake()->create($requirement->slug.'.pdf', 512),
+                ])->assertStatus(201);
+        }
 
         $this->fromSpa()
             ->postJson('/api/student/applications/'.$application->id.'/submit')
@@ -304,8 +318,14 @@ class ApplicationFlowTest extends TestCase
             ->assertJsonCount(1, 'data');
 
         $this->fromSpa()
-            ->getJson('/api/staff/applications')
+            ->getJson('/api/staff/applications?status=all')
             ->assertOk()
             ->assertJsonCount(2, 'data');
+
+        // The default view prioritises submitted applications.
+        $this->fromSpa()
+            ->getJson('/api/staff/applications')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
     }
 }
