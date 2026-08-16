@@ -15,6 +15,18 @@ export type ProgramCycleStatus = "draft" | "upcoming" | "open" | "closed" | "arc
 
 export type DocumentVerificationStatus = "pending" | "verified" | "rejected"
 
+export type DocumentVerificationAction = "verified" | "rejected"
+
+export interface DocumentVerificationRequest {
+  verification_status: DocumentVerificationAction
+  rejection_reason?: string
+}
+
+export interface DocumentRejectionRequest {
+  verification_status: "rejected"
+  rejection_reason: string
+}
+
 export type DeploymentStatus = "scheduled" | "active" | "completed" | "cancelled"
 
 export interface Requirement {
@@ -154,7 +166,8 @@ export interface ApplicationDocument {
   rejection_reason: string | null
   uploaded_at: string | null
   verified_at: string | null
-  verified_by: string | null
+  verified_by?: string | null
+  view_url: string
   download_url: string
 }
 

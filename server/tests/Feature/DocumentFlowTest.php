@@ -91,12 +91,13 @@ class DocumentFlowTest extends TestCase
                 'file' => UploadedFile::fake()->create('cor.pdf', 512),
             ])->assertStatus(201);
 
+        $application->update(['status' => 'submitted', 'submitted_at' => now()]);
         $document = $application->documents()->firstOrFail();
 
         $this->loginAsStaff();
 
         $this->fromSpa()
-            ->putJson('/api/staff/applications/'.$application->id.'/documents/'.$document->id.'/verify', [
+            ->patchJson('/api/staff/applications/'.$application->id.'/documents/'.$document->id.'/verification', [
                 'verification_status' => 'verified',
             ])
             ->assertOk()
@@ -116,12 +117,13 @@ class DocumentFlowTest extends TestCase
                 'file' => UploadedFile::fake()->create('cor.pdf', 512),
             ])->assertStatus(201);
 
+        $application->update(['status' => 'submitted', 'submitted_at' => now()]);
         $document = $application->documents()->firstOrFail();
 
         $this->loginAsStaff();
 
         $this->fromSpa()
-            ->putJson('/api/staff/applications/'.$application->id.'/documents/'.$document->id.'/verify', [
+            ->patchJson('/api/staff/applications/'.$application->id.'/documents/'.$document->id.'/verification', [
                 'verification_status' => 'rejected',
             ])
             ->assertStatus(422)

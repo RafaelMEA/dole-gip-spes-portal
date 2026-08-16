@@ -85,7 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/applications/{application}/review', [StaffApplicationController::class, 'review']);
 
         Route::get('/applications/{application}/documents', [StaffDocumentController::class, 'index']);
-        Route::put('/applications/{application}/documents/{document}/verify', [StaffDocumentController::class, 'verify']);
+        Route::patch('/applications/{application}/documents/{document}/verification', [StaffDocumentController::class, 'update']);
 
         Route::get('/deployments', [DeploymentController::class, 'index']);
         Route::post('/deployments', [DeploymentController::class, 'store']);

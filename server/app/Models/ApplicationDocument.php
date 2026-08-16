@@ -51,6 +51,10 @@ class ApplicationDocument extends Model
 
     /**
      * Mark this document as verified by the given staff member.
+     *
+     * A verified document can never carry a rejection reason; any previous
+     * rejection reason is cleared so the record cannot end up in a
+     * contradictory state.
      */
     public function verify(int $userId): void
     {
@@ -58,6 +62,7 @@ class ApplicationDocument extends Model
             'verification_status' => DocumentVerificationStatus::Verified,
             'verified_by' => $userId,
             'verified_at' => now(),
+            'rejection_reason' => null,
         ]);
     }
 

@@ -33,7 +33,13 @@ class ApplicationDocumentResource extends JsonResource
             'rejection_reason' => $this->rejection_reason,
             'uploaded_at' => $this->uploaded_at?->toISOString(),
             'verified_at' => $this->verified_at?->toISOString(),
-            'verified_by' => $this->whenLoaded('verifiedBy', fn () => $this->verifiedBy?->name),
+            // The verifying staff member's name is only relevant to staff;
+            // students do not need to know which officer made the decision.
+            'verified_by' => $this->when(
+                $request->user()?->isStaff() && $this->relationLoaded('verifiedBy'),
+                fn () => $this->verifiedBy?->name,
+            ),
+            'view_url' => url('/api/documents/'.$this->id.'/download?disposition=inline'),
             'download_url' => url('/api/documents/'.$this->id.'/download'),
         ];
     }

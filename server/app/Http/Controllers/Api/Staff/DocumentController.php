@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Staff;
 
+use App\Enums\DocumentVerificationStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\VerifyDocumentRequest;
 use App\Http\Resources\ApplicationDocumentResource;
@@ -28,17 +29,32 @@ class DocumentController extends Controller
 
     /**
      * Verify or reject a submitted document.
+     *
+     * The document is resolved both through the application route parameter
+     * and the document route parameter, and the two are cross-checked so a
+     * staff member can never touch a document that does not belong to the
+     * application they are reviewing (IDOR protection). Only pending
+     * documents may be decided; already-decided documents are immutable.
      */
-    public function verify(Application $application, ApplicationDocument $document, VerifyDocumentRequest $request)
-    {
+    public function update(
+        Application $application,
+        ApplicationDocument $document,
+        VerifyDocumentRequest $request,
+    ) {
         abort_if($document->application_id !== $application->id, 404);
 
         $this->authorize('verify', $document);
 
-        if ($request->validated('verification_status') === 'verified') {
+        abort_if(
+            $document->verification_status !== DocumentVerificationStatus::Pending,
+            422,
+            'Only pending documents can be verified or rejected.',
+        );
+
+        if ($request->validated('verification_status') === DocumentVerificationStatus::Verified->value) {
             $document->verify($request->user()->id);
         } else {
-            $document->reject($request->user()->id, $request->validated('rejection_reason'));
+            $document->reject($request->user()->id, (string) $request->validated('rejection_reason'));
         }
 
         return new ApplicationDocumentResource($document->load(['requirement', 'verifiedBy']));

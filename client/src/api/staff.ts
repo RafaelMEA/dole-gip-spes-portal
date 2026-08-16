@@ -5,6 +5,8 @@ import type {
   ApplicationDocument,
   DeploymentAssignment,
   DeploymentSite,
+  DocumentVerificationAction,
+  DocumentVerificationRequest,
   HostAgency,
   Paginated,
   Program,
@@ -72,18 +74,18 @@ export async function reviewApplication(
 export async function verifyDocument(
   applicationId: number,
   documentId: number,
-  status: "verified" | "rejected",
+  status: DocumentVerificationAction,
   rejectionReason?: string,
 ): Promise<ApplicationDocument> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<ApplicationDocument>>(
-    `/api/staff/applications/${applicationId}/documents/${documentId}/verify`,
+    `/api/staff/applications/${applicationId}/documents/${documentId}/verification`,
     {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify({
         verification_status: status,
         ...(status === "rejected" ? { rejection_reason: rejectionReason } : {}),
-      }),
+      } satisfies DocumentVerificationRequest),
     },
   )
   return unwrap(response)

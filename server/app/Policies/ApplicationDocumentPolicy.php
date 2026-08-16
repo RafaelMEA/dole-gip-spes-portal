@@ -40,11 +40,36 @@ class ApplicationDocumentPolicy
     }
 
     /**
-     * Staff verify/reject documents.
+     * Staff verify/reject documents, but only while the application is in a
+     * staff-reviewable state.
+     *
+     * Draft applications are entirely student-controlled, so their documents
+     * can never be decided on. Documents for applications that have already
+     * been approved (or moved past review into deployment/completion) are no
+     * longer subject to verification either. Applications returned to the
+     * student for more documents (documents_incomplete) are also excluded:
+     * any replacements uploaded there stay pending until the student submits
+     * the application again.
      */
     public function verify(User $user, ApplicationDocument $document): bool
     {
-        return $user->isStaff();
+        return $user->isStaff()
+            && in_array($document->application->status, self::staffReviewableStatuses(), true);
+    }
+
+    /**
+     * The application statuses in which a document may be verified or
+     * rejected.
+     *
+     * @return array<int, ApplicationStatus>
+     */
+    private static function staffReviewableStatuses(): array
+    {
+        return [
+            ApplicationStatus::Submitted,
+            ApplicationStatus::UnderReview,
+            ApplicationStatus::DocumentsVerified,
+        ];
     }
 
     /**

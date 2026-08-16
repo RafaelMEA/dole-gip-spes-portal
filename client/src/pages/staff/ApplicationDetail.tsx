@@ -4,17 +4,13 @@ import {
   ArrowLeft,
   Building2,
   CalendarRange,
-  CheckCircle2,
-  Download,
   FileText,
   GraduationCap,
   Loader2,
   Mail,
   MapPin,
-  Paperclip,
   Send,
   User,
-  XCircle,
 } from "lucide-react"
 import {
   createDeployment,
@@ -23,12 +19,11 @@ import {
   fetchStaffApplication,
   reviewApplication,
   updateDeploymentStatus,
-  verifyDocument,
 } from "@/api/staff"
 import type { ReviewAction } from "@/api/staff"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
-import { formatDateTime, formatFileSize } from "@/lib/format"
+import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -42,13 +37,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/PageHeader"
 import { StatusTimeline } from "@/components/StatusTimeline"
-import { ApplicationStatusBadge, DeploymentStatusBadge, DocumentStatusBadge } from "@/components/StatusBadge"
+import { ApplicationStatusBadge, DeploymentStatusBadge } from "@/components/StatusBadge"
+import { DocumentReview } from "@/components/staff/DocumentReview"
 import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
-import type { ApplicationDocument } from "@/types/api"
 
 interface ActionModal {
   type: ReviewAction | "schedule_deployment"
@@ -148,12 +143,6 @@ export function StaffApplicationDetailPage() {
   const [scheduleError, setScheduleError] = useState<string | null>(null)
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
-  const [docTarget, setDocTarget] = useState<ApplicationDocument | null>(null)
-  const [docStatus, setDocStatus] = useState<"verified" | "rejected">("verified")
-  const [docReason, setDocReason] = useState("")
-  const [docError, setDocError] = useState<string | null>(null)
-  const [docLoading, setDocLoading] = useState(false)
-
   if (loading && !application) return <FullPageLoader />
 
   if (error && !application) {
@@ -174,6 +163,9 @@ export function StaffApplicationDetailPage() {
 
   const actions = STATUS_ACTIONS[application.status] ?? []
   const documents = application.documents ?? []
+  const requiredCount =
+    application.program_cycle?.requirements?.filter((requirement) => requirement.is_required)
+      .length ?? 0
   const assignment = application.assignment
 
   function openAction(action: ActionModal) {
@@ -275,33 +267,6 @@ export function StaffApplicationDetailPage() {
     }
   }
 
-  async function handleVerifyDocument() {
-    if (!docTarget) return
-    if (docStatus === "rejected" && !docReason.trim()) {
-      setDocError("A rejection reason is required.")
-      return
-    }
-    setDocLoading(true)
-    setDocError(null)
-    try {
-      await verifyDocument(applicationId, docTarget.id, docStatus, docReason.trim() || undefined)
-      toast({
-        title: docStatus === "verified" ? "Document verified" : "Document rejected",
-        description: docStatus === "verified" ? "The document has been verified." : "The document was rejected.",
-        variant: docStatus === "verified" ? "success" : "error",
-      })
-      setDocTarget(null)
-      setDocReason("")
-      await reload()
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Unable to verify document."
-      setDocError(message)
-      toast({ title: "Unable to verify", description: message, variant: "error" })
-    } finally {
-      setDocLoading(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <Button nativeButton={false} variant="ghost" size="sm" render={<Link to="/staff/review" />}>
@@ -345,91 +310,12 @@ export function StaffApplicationDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
-              <CardDescription>
-                {application.missing_required_documents.length > 0 ? (
-                  <span className="text-amber-600">
-                    {application.missing_required_documents.join(", ")} still pending
-                  </span>
-                ) : (
-                  "All required documents submitted"
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {documents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
-              ) : (
-                documents.map((document) => (
-                  <div
-                    key={document.id}
-                    className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="truncate text-sm font-medium">{document.requirement?.name ?? document.file_name}</p>
-                        <DocumentStatusBadge status={document.verification_status} label={document.verification_label} />
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {document.file_name} · {document.mime_type ?? "file"} · {formatFileSize(document.file_size)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Uploaded {formatDateTime(document.uploaded_at)}
-                        {document.verified_at ? ` · Verified ${formatDateTime(document.verified_at)}` : ""}
-                      </p>
-                      {document.verification_status === "rejected" && document.rejection_reason ? (
-                        <p className="text-xs text-red-600">Rejected: {document.rejection_reason}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button
-                        nativeButton={false}
-                        variant="outline"
-                        size="sm"
-                        render={<a href={document.download_url} target="_blank" rel="noreferrer" />}
-                      >
-                        <Download aria-hidden="true" />
-                        Download
-                      </Button>
-                      {document.verification_status === "pending" ? (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setDocStatus("verified")
-                              setDocReason("")
-                              setDocError(null)
-                              setDocTarget(document)
-                            }}
-                          >
-                            <CheckCircle2 aria-hidden="true" />
-                            Verify
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              setDocStatus("rejected")
-                              setDocReason("")
-                              setDocError(null)
-                              setDocTarget(document)
-                            }}
-                          >
-                            <XCircle aria-hidden="true" />
-                            Reject
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          <DocumentReview
+            applicationId={applicationId}
+            documents={documents}
+            requiredCount={requiredCount}
+            onChanged={() => void reload()}
+          />
 
           <Card>
             <CardHeader>
@@ -721,50 +607,6 @@ export function StaffApplicationDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={docTarget !== null} onOpenChange={(open) => !open && setDocTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{docStatus === "verified" ? "Verify document" : "Reject document"}</DialogTitle>
-            <DialogDescription>{docTarget?.file_name}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {docStatus === "verified" ? (
-              <p className="text-sm text-muted-foreground">
-                Confirm that this document is authentic and acceptable for the application.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="doc-reason">Rejection reason (required)</Label>
-                <Textarea
-                  id="doc-reason"
-                  value={docReason}
-                  onChange={(event) => setDocReason(event.target.value)}
-                  placeholder="e.g. Blurred scan, expired certificate..."
-                />
-              </div>
-            )}
-            {docError ? (
-              <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {docError}
-              </p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDocTarget(null)} disabled={docLoading}>
-              Cancel
-            </Button>
-            <Button
-              variant={docStatus === "rejected" ? "outline" : "default"}
-              className={docStatus === "rejected" ? "text-destructive hover:text-destructive" : undefined}
-              onClick={handleVerifyDocument}
-              disabled={docLoading}
-            >
-              {docLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-              {docStatus === "verified" ? "Verify" : "Reject"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
