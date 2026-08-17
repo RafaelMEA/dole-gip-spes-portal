@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCycleRequirementRequest;
 use App\Http\Requests\StoreDeploymentSiteRequest;
 use App\Http\Requests\StoreHostAgencyRequest;
+use App\Http\Requests\UpdateHostAgencyRequest;
 use App\Http\Requests\StoreProgramCycleRequest;
 use App\Http\Requests\StoreProgramRequest;
 use App\Http\Requests\StoreRequirementRequest;
@@ -343,11 +344,44 @@ class CatalogController extends Controller
     {
         $this->authorize('viewAny', HostAgency::class);
 
-        return HostAgencyResource::collection(
-            HostAgency::withCount(['deploymentAssignments as active_assignments_count'])
-                ->orderBy('name')
-                ->get(),
-        );
+        $query = HostAgency::withCount(['deploymentAssignments as active_assignments_count']);
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->trim()->lower();
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(contact_person) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(email) LIKE ?', ["%{$search}%"]);
+            });
+        }
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('is_active', $request->input('status') === 'active');
+        }
+
+        $sort = $request->input('sort', 'name');
+        $direction = $request->input('direction', 'asc');
+        $allowedSorts = ['name', 'created_at', 'updated_at'];
+
+        if (in_array($sort, $allowedSorts, true)) {
+            $query->orderBy($sort, $direction === 'desc' ? 'desc' : 'asc');
+        } else {
+            $query->orderBy('name');
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 20;
+
+        return HostAgencyResource::collection($query->paginate($perPage));
+    }
+
+    public function showHostAgency(HostAgency $agency)
+    {
+        $this->authorize('view', $agency);
+
+        $agency->loadCount(['deploymentAssignments as active_assignments_count']);
+
+        return new HostAgencyResource($agency);
     }
 
     public function storeHostAgency(StoreHostAgencyRequest $request)
@@ -359,11 +393,24 @@ class CatalogController extends Controller
         return (new HostAgencyResource($agency))->response()->setStatusCode(201);
     }
 
-    public function updateHostAgency(HostAgency $agency, StoreHostAgencyRequest $request)
+    public function updateHostAgency(HostAgency $agency, UpdateHostAgencyRequest $request)
     {
         $this->authorize('update', $agency);
 
         $agency->update($request->validated());
+
+        return new HostAgencyResource($agency);
+    }
+
+    public function updateHostAgencyStatus(HostAgency $agency, Request $request)
+    {
+        $this->authorize('manage', $agency);
+
+        $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $agency->update(['is_active' => $request->boolean('is_active')]);
 
         return new HostAgencyResource($agency);
     }

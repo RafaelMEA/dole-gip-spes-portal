@@ -6,7 +6,7 @@ use App\Enums\HostAgencyType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreHostAgencyRequest extends FormRequest
+class UpdateHostAgencyRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -19,13 +19,12 @@ class StoreHostAgencyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'agency_type' => ['nullable', Rule::enum(HostAgencyType::class)],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'agency_type' => ['sometimes', Rule::enum(HostAgencyType::class)],
             'address' => ['nullable', 'string', 'max:500'],
             'contact_person' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
-            'is_active' => ['nullable', 'boolean'],
         ];
     }
 }

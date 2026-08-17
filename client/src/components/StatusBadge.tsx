@@ -12,6 +12,7 @@ const APPLICATION_STYLES: Record<ApplicationStatus, string> = {
   under_review: "bg-indigo-100 text-indigo-700 border-transparent",
   documents_incomplete: "bg-amber-100 text-amber-800 border-transparent",
   documents_verified: "bg-teal-100 text-teal-700 border-transparent",
+  returned_for_correction: "bg-amber-100 text-amber-800 border-transparent",
   approved: "bg-emerald-100 text-emerald-700 border-transparent",
   for_deployment: "bg-violet-100 text-violet-700 border-transparent",
   deployed: "bg-blue-100 text-blue-700 border-transparent",

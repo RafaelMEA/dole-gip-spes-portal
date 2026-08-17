@@ -4,6 +4,7 @@ export type ApplicationStatus =
   | "under_review"
   | "documents_incomplete"
   | "documents_verified"
+  | "returned_for_correction"
   | "approved"
   | "for_deployment"
   | "deployed"
@@ -16,6 +17,19 @@ export type ProgramCycleStatus = "draft" | "upcoming" | "open" | "closed" | "arc
 export type DocumentVerificationStatus = "pending" | "verified" | "rejected"
 
 export type DocumentVerificationAction = "verified" | "rejected"
+
+export type HostAgencyType = "government" | "private" | "ngo" | "other"
+
+export type HostAgencyStatusFilter = "all" | "active" | "inactive"
+
+export interface HostAgencyFilters {
+  search?: string
+  status?: HostAgencyStatusFilter
+  sort?: string
+  direction?: "asc" | "desc"
+  page?: number
+  per_page?: number
+}
 
 export interface DocumentVerificationRequest {
   verification_status: DocumentVerificationAction
@@ -113,12 +127,15 @@ export interface StatusHistoryItem {
 export interface HostAgency {
   id: number
   name: string
+  agency_type: HostAgencyType
+  agency_type_label: string
   address: string | null
   contact_person: string | null
   contact_number: string | null
   email: string | null
   is_active: boolean
   active_assignments: number
+  created_at: string
 }
 
 export interface DeploymentSite {
@@ -192,6 +209,9 @@ export interface Application {
   status: ApplicationStatus
   status_label: string
   remarks: string | null
+  decision_reason: string | null
+  decided_at: string | null
+  decided_by?: string | null
   submitted_at: string | null
   approved_at: string | null
   created_at: string

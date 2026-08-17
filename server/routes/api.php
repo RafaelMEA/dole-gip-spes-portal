@@ -118,7 +118,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/catalog/host-agencies', [CatalogController::class, 'hostAgencies']);
         Route::post('/catalog/host-agencies', [CatalogController::class, 'storeHostAgency']);
+        Route::get('/catalog/host-agencies/{agency}', [CatalogController::class, 'showHostAgency']);
         Route::put('/catalog/host-agencies/{agency}', [CatalogController::class, 'updateHostAgency']);
+        Route::patch('/catalog/host-agencies/{agency}/status', [CatalogController::class, 'updateHostAgencyStatus']);
 
         Route::get('/catalog/deployment-sites', [CatalogController::class, 'deploymentSites']);
         Route::post('/catalog/deployment-sites', [CatalogController::class, 'storeDeploymentSite']);

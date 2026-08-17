@@ -98,6 +98,7 @@ class ApplicationController extends Controller
             'statusHistory.changedBy',
             'deploymentAssignment.hostAgency',
             'deploymentAssignment.deploymentSite',
+            'decidedBy',
         ]);
 
         return new ApplicationResource($application);
@@ -117,6 +118,7 @@ class ApplicationController extends Controller
             $application = match ($action) {
                 'start_review' => $this->applications->startReview($application, $request->user(), $remarks),
                 'request_documents' => $this->applications->requestDocuments($application, $request->user(), $remarks ?? ''),
+                'return_for_correction' => $this->applications->returnForCorrection($application, $request->user(), $remarks ?? ''),
                 'approve' => $this->applications->approve($application, $request->user(), $remarks),
                 'reject' => $this->applications->reject($application, $request->user(), $remarks ?? ''),
                 'schedule_deployment' => $this->applications->scheduleForDeployment($application, $request->user(), $remarks),

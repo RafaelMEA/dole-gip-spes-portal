@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
+  AlertTriangle,
   ArrowLeft,
   Building2,
   CalendarRange,
+  CheckCircle2,
   FileText,
   GraduationCap,
   Loader2,
@@ -11,6 +13,7 @@ import {
   MapPin,
   Send,
   User,
+  XCircle,
 } from "lucide-react"
 import {
   createDeployment,
@@ -66,6 +69,18 @@ const STATUS_ACTIONS: Record<string, ActionModal[]> = {
       description: "Return the application to the student to upload additional documents.",
       requiresRemarks: true,
     },
+    {
+      type: "return_for_correction",
+      title: "Return for correction",
+      description: "Return the application to the student with specific correction instructions.",
+      requiresRemarks: true,
+    },
+    {
+      type: "reject",
+      title: "Reject application",
+      description: "Permanently reject this application. This action cannot be undone.",
+      requiresRemarks: true,
+    },
   ],
   under_review: [
     {
@@ -78,6 +93,32 @@ const STATUS_ACTIONS: Record<string, ActionModal[]> = {
       type: "request_documents",
       title: "Request more documents",
       description: "Return the application to the student to upload additional documents.",
+      requiresRemarks: true,
+    },
+    {
+      type: "return_for_correction",
+      title: "Return for correction",
+      description: "Return the application to the student with specific correction instructions.",
+      requiresRemarks: true,
+    },
+    {
+      type: "reject",
+      title: "Reject application",
+      description: "Permanently reject this application. This action cannot be undone.",
+      requiresRemarks: true,
+    },
+  ],
+  returned_for_correction: [
+    {
+      type: "approve",
+      title: "Approve application",
+      description: "Approve this application despite the correction request.",
+      requiresRemarks: false,
+    },
+    {
+      type: "reject",
+      title: "Reject application",
+      description: "Permanently reject this application. This action cannot be undone.",
       requiresRemarks: true,
     },
   ],
@@ -124,7 +165,7 @@ export function StaffApplicationDetailPage() {
   const fetcher = useCallback(() => fetchStaffApplication(applicationId), [applicationId])
   const { data: application, loading, error, reload } = useAsync(fetcher)
 
-  const { data: agencies } = useAsync(fetchHostAgencies)
+  const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
   const { data: sites } = useAsync(fetchDeploymentSites)
 
   const [activeAction, setActiveAction] = useState<ActionModal | null>(null)
@@ -167,6 +208,7 @@ export function StaffApplicationDetailPage() {
     application.program_cycle?.requirements?.filter((requirement) => requirement.is_required)
       .length ?? 0
   const assignment = application.assignment
+  const isTerminal = ["approved", "rejected", "withdrawn", "completed"].includes(application.status)
 
   function openAction(action: ActionModal) {
     setActiveAction(action)
@@ -287,24 +329,101 @@ export function StaffApplicationDetailPage() {
         </p>
       ) : null}
 
-      {actions.length > 0 || application.status === "approved" ? (
+      {application.status === "returned_for_correction" && application.decision_reason ? (
+        <div className="rounded-lg border border-amber-600/30 bg-amber-600/10 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Returned for correction</p>
+              <p className="mt-1 text-sm text-amber-700">{application.decision_reason}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {application.status === "rejected" && application.decision_reason ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Application rejected</p>
+              <p className="mt-1 text-sm text-destructive/80">{application.decision_reason}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {!isTerminal && actions.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Application Decision</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+                <div>
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Required Docs
+                  </dt>
+                  <dd className="mt-0.5 font-semibold">{requiredCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Verified
+                  </dt>
+                  <dd className="mt-0.5 font-semibold text-emerald-600">
+                    ✓ {documents.filter((d) => d.verification_status === "verified").length}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Rejected
+                  </dt>
+                  <dd className="mt-0.5 font-semibold text-red-600">
+                    ✗ {documents.filter((d) => d.verification_status === "rejected").length}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Pending
+                  </dt>
+                  <dd className="mt-0.5 font-semibold text-amber-600">
+                    ○ {documents.filter((d) => d.verification_status === "pending").length}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {application.status === "approved" ? (
+                <Button onClick={() => setScheduleOpen(true)}>
+                  <Building2 aria-hidden="true" />
+                  Schedule deployment
+                </Button>
+              ) : null}
+              {actions.map((action) => (
+                <Button
+                  key={action.type}
+                  variant={action.type === "reject" ? "outline" : "default"}
+                  className={action.type === "reject" ? "text-destructive hover:text-destructive" : ""}
+                  onClick={() => openAction(action)}
+                >
+                  {action.type === "approve" && <CheckCircle2 className="size-4" aria-hidden="true" />}
+                  {action.type === "reject" && <XCircle className="size-4" aria-hidden="true" />}
+                  {action.type === "return_for_correction" && <AlertTriangle className="size-4" aria-hidden="true" />}
+                  {action.title}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : application.status === "approved" ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-4">
           <p className="mr-2 text-sm font-medium">Actions:</p>
-          {application.status === "approved" ? (
-            <Button onClick={() => setScheduleOpen(true)}>
-              <Building2 aria-hidden="true" />
-              Schedule deployment
-            </Button>
-          ) : null}
-          {actions.map((action) => (
-            <Button
-              key={action.type}
-              variant="outline"
-              onClick={() => openAction(action)}
-            >
-              {action.title}
-            </Button>
-          ))}
+          <Button onClick={() => setScheduleOpen(true)}>
+            <Building2 aria-hidden="true" />
+            Schedule deployment
+          </Button>
         </div>
       ) : null}
 
@@ -390,6 +509,12 @@ export function StaffApplicationDetailPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last updated</p>
                 <p className="mt-0.5">{formatDateTime(application.updated_at)}</p>
               </div>
+              {application.decision_reason ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Decision reason</p>
+                  <p className="mt-0.5 text-muted-foreground">{application.decision_reason}</p>
+                </div>
+              ) : null}
               {application.remarks ? (
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Remarks</p>
@@ -481,6 +606,7 @@ export function StaffApplicationDetailPage() {
               Cancel
             </Button>
             <Button
+              className={activeAction?.type === "reject" ? "text-destructive hover:text-destructive" : ""}
               onClick={() => {
                 if (activeAction?.type === "deploy" && assignment) {
                   void handleDeployViaAssignment()
@@ -524,7 +650,7 @@ export function StaffApplicationDetailPage() {
                   <SelectValue placeholder="Select host agency" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(agencies ?? []).map((agency) => (
+                  {(agenciesPage?.data ?? []).map((agency) => (
                     <SelectItem key={agency.id} value={String(agency.id)}>
                       {agency.name}
                     </SelectItem>

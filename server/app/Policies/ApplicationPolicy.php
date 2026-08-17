@@ -33,10 +33,7 @@ class ApplicationPolicy
         }
 
         return $user->id === $application->applicant_id
-            && in_array($application->status, [
-                ApplicationStatus::Draft,
-                ApplicationStatus::DocumentsIncomplete,
-            ], true);
+            && $application->status->isEditableByStudent();
     }
 
     public function delete(User $user, Application $application): bool
@@ -51,7 +48,10 @@ class ApplicationPolicy
     public function submit(User $user, Application $application): bool
     {
         return $user->id === $application->applicant_id
-            && $application->status === ApplicationStatus::Draft;
+            && in_array($application->status, [
+                ApplicationStatus::Draft,
+                ApplicationStatus::ReturnedForCorrection,
+            ], true);
     }
 
     public function withdraw(User $user, Application $application): bool
@@ -66,7 +66,9 @@ class ApplicationPolicy
     public function resubmit(User $user, Application $application): bool
     {
         return $user->id === $application->applicant_id
-            && $application->status === ApplicationStatus::DocumentsIncomplete;
+            && in_array($application->status, [
+                ApplicationStatus::ReturnedForCorrection,
+            ], true);
     }
 
     /**

@@ -36,7 +36,7 @@ import {
   updateProgram,
   updateRequirement,
 } from "@/api/staff"
-import type { CatalogPayload, CyclePayload, RequirementPayload } from "@/api/staff"
+import type { CatalogPayload, CyclePayload, RequirementPayload, HostAgencyPayload } from "@/api/staff"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
 import { formatDate, formatMaxUploadSize } from "@/lib/format"
@@ -152,7 +152,7 @@ export function StaffCatalogPage() {
   const { data: programs, loading: programsLoading, error: programsError, reload: reloadPrograms } = useAsync(fetchProgramsCatalog)
   const { data: cycles, loading: cyclesLoading, error: cyclesError, reload: reloadCycles } = useAsync(fetchCyclesCatalog)
   const { data: requirements, loading: requirementsLoading, error: requirementsError, reload: reloadRequirements } = useAsync(fetchRequirementsCatalog)
-  const { data: agencies, loading: agenciesLoading, error: agenciesError, reload: reloadAgencies } = useAsync(fetchHostAgencies)
+  const { data: agenciesPage, loading: agenciesLoading, error: agenciesError, reload: reloadAgencies } = useAsync(() => fetchHostAgencies({ per_page: 100 }))
   const { data: sites, loading: sitesLoading, error: sitesError, reload: reloadSites } = useAsync(fetchDeploymentSites)
 
   const [programModal, setProgramModal] = useState<{ open: boolean; form: ProgramForm }>({ open: false, form: emptyProgram })
@@ -249,7 +249,10 @@ export function StaffCatalogPage() {
   }
 
   function saveAgency() {
-    const { id, ...payload } = agencyModal.form
+    const { id, agency_type_label, created_at, active_assignments, ...rest } = agencyModal.form
+    const payload = Object.fromEntries(
+      Object.entries(rest).map(([key, value]) => [key, value === null ? undefined : value]),
+    ) as unknown as HostAgencyPayload
     void run(
       () => (id ? updateHostAgency(id, payload) : createHostAgency(payload)),
       id ? "Host agency updated." : "Host agency created.",
@@ -580,10 +583,10 @@ export function StaffCatalogPage() {
         <TabsContent value="agencies" className="mt-4 space-y-4">
           {errorFor(agenciesError)}
           {agenciesLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-          {agencies && agencies.length === 0 ? (
+          {agenciesPage && agenciesPage.data.length === 0 ? (
             <EmptyCatalog title="No host agencies" description="Add agencies that host interns." onAdd={() => setAgencyModal({ open: true, form: emptyAgency })} />
           ) : null}
-          {agencies && agencies.length > 0 ? (
+          {agenciesPage && agenciesPage.data.length > 0 ? (
             <div className="space-y-3">
               <div className="flex justify-end">
                 <Button onClick={() => setAgencyModal({ open: true, form: emptyAgency })}>
@@ -591,7 +594,7 @@ export function StaffCatalogPage() {
                   New agency
                 </Button>
               </div>
-              {agencies.map((agency) => (
+              {agenciesPage.data.map((agency) => (
                 <Card key={agency.id}>
                   <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0 space-y-0.5">

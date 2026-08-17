@@ -17,6 +17,8 @@ class ApplicationResource extends JsonResource
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'remarks' => $this->remarks,
+            'decision_reason' => $this->decision_reason,
+            'decided_at' => $this->decided_at?->toISOString(),
             'submitted_at' => $this->submitted_at?->toISOString(),
             'approved_at' => $this->approved_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
@@ -31,6 +33,7 @@ class ApplicationResource extends JsonResource
             'status_history' => ApplicationStatusHistoryResource::collection($this->whenLoaded('statusHistory')),
             'assignment' => $this->whenLoaded('deploymentAssignment', fn () => new DeploymentAssignmentResource($this->deploymentAssignment)),
             'applicant' => $this->whenLoaded('applicant', fn () => new UserResource($this->applicant)),
+            'decided_by' => $this->whenLoaded('decidedBy', fn () => $this->decidedBy?->name),
         ];
     }
 }

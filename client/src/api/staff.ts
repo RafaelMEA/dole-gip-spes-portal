@@ -8,6 +8,8 @@ import type {
   DocumentVerificationAction,
   DocumentVerificationRequest,
   HostAgency,
+  HostAgencyFilters,
+  HostAgencyType,
   Paginated,
   Program,
   ProgramCycle,
@@ -52,6 +54,7 @@ export async function fetchStaffApplication(id: number): Promise<Application> {
 export type ReviewAction =
   | "start_review"
   | "request_documents"
+  | "return_for_correction"
   | "approve"
   | "reject"
   | "schedule_deployment"
@@ -145,9 +148,23 @@ export async function fetchRequirementsCatalog(): Promise<Requirement[]> {
   return response.data
 }
 
-export async function fetchHostAgencies(): Promise<HostAgency[]> {
-  const response = await apiRequest<ApiEnvelope<HostAgency[]>>("/api/staff/catalog/host-agencies")
-  return response.data
+export async function fetchHostAgencies(filters: HostAgencyFilters = {}): Promise<Paginated<HostAgency>> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value))
+    }
+  }
+  const qs = params.toString()
+  const response = await apiRequest<Paginated<HostAgency>>(
+    `/api/staff/catalog/host-agencies${qs ? `?${qs}` : ""}`,
+  )
+  return response
+}
+
+export async function fetchHostAgency(id: number): Promise<HostAgency> {
+  const response = await apiRequest<ApiEnvelope<HostAgency>>(`/api/staff/catalog/host-agencies/${id}`)
+  return unwrap(response)
 }
 
 export async function fetchDeploymentSites(): Promise<DeploymentSite[]> {
@@ -329,7 +346,17 @@ export async function removeCycleRequirement(
   })
 }
 
-export async function createHostAgency(payload: Partial<HostAgency>): Promise<HostAgency> {
+export interface HostAgencyPayload {
+  name: string
+  agency_type?: HostAgencyType
+  address?: string
+  contact_person?: string
+  contact_number?: string
+  email?: string
+  is_active?: boolean
+}
+
+export async function createHostAgency(payload: HostAgencyPayload): Promise<HostAgency> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<HostAgency>>("/api/staff/catalog/host-agencies", {
     method: "POST",
@@ -340,12 +367,21 @@ export async function createHostAgency(payload: Partial<HostAgency>): Promise<Ho
 
 export async function updateHostAgency(
   id: number,
-  payload: Partial<HostAgency>,
+  payload: Partial<HostAgencyPayload>,
 ): Promise<HostAgency> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<HostAgency>>(
     `/api/staff/catalog/host-agencies/${id}`,
     { method: "PUT", body: JSON.stringify(payload) },
+  )
+  return unwrap(response)
+}
+
+export async function updateHostAgencyStatus(id: number, isActive: boolean): Promise<HostAgency> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<HostAgency>>(
+    `/api/staff/catalog/host-agencies/${id}/status`,
+    { method: "PATCH", body: JSON.stringify({ is_active: isActive }) },
   )
   return unwrap(response)
 }

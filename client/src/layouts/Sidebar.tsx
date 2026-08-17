@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, NavLink, useNavigate } from "react-router-dom"
 import {
+  Building,
   Building2,
   CalendarRange,
   ClipboardList,
@@ -46,6 +47,7 @@ export function Sidebar() {
       : [
           { to: dashboardPath, label: "Dashboard", icon: LayoutDashboard, end: true },
           { to: "/staff/review", label: "Review applications", icon: ClipboardList },
+          { to: "/staff/host-agencies", label: "Host agencies", icon: Building },
           { to: "/staff/deployments", label: "Deployments", icon: Building2 },
           { to: "/staff/catalog", label: "Catalog", icon: Library },
         ]

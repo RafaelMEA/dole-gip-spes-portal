@@ -27,7 +27,7 @@ class HostAgencyPolicy
         return $user->isStaff();
     }
 
-    public function delete(User $user, HostAgency $agency): bool
+    public function manage(User $user, HostAgency $agency): bool
     {
         return $user->isStaff();
     }

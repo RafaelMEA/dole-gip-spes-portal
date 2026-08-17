@@ -9,6 +9,7 @@ enum ApplicationStatus: string
     case UnderReview = 'under_review';
     case DocumentsIncomplete = 'documents_incomplete';
     case DocumentsVerified = 'documents_verified';
+    case ReturnedForCorrection = 'returned_for_correction';
     case Approved = 'approved';
     case ForDeployment = 'for_deployment';
     case Deployed = 'deployed';
@@ -24,6 +25,7 @@ enum ApplicationStatus: string
         return in_array($this, [
             self::Draft,
             self::Submitted,
+            self::ReturnedForCorrection,
             self::Withdrawn,
         ], true);
     }
@@ -37,6 +39,17 @@ enum ApplicationStatus: string
     }
 
     /**
+     * Whether the application is in a student-editable state.
+     */
+    public function isEditableByStudent(): bool
+    {
+        return in_array($this, [
+            self::Draft,
+            self::ReturnedForCorrection,
+        ], true);
+    }
+
+    /**
      * Human-readable label for UI display.
      */
     public function label(): string
@@ -47,6 +60,7 @@ enum ApplicationStatus: string
             self::UnderReview => 'Under Review',
             self::DocumentsIncomplete => 'Documents Incomplete',
             self::DocumentsVerified => 'Documents Verified',
+            self::ReturnedForCorrection => 'Correction Required',
             self::Approved => 'Approved',
             self::ForDeployment => 'For Deployment',
             self::Deployed => 'Deployed',

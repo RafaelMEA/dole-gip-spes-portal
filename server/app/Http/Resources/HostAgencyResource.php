@@ -15,12 +15,15 @@ class HostAgencyResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'agency_type' => $this->agency_type?->value,
+            'agency_type_label' => $this->agency_type?->label(),
             'address' => $this->address,
             'contact_person' => $this->contact_person,
             'contact_number' => $this->contact_number,
             'email' => $this->email,
-            'is_active' => (bool) $this->is_active,
+            'is_active' => $this->is_active,
             'active_assignments' => $this->active_assignments_count ?? 0,
+            'created_at' => $this->created_at?->toISOString(),
         ];
     }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   CalendarRange,
@@ -13,10 +14,12 @@ import {
   Trash2,
   Upload,
   User,
+  XCircle,
 } from "lucide-react"
 import {
   deleteDocument,
   fetchApplication,
+  submitApplication,
   updateApplication,
   uploadDocument,
   withdrawApplication,
@@ -61,6 +64,7 @@ export function StudentApplicationDetailPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ApplicationDocument | null>(null)
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false)
 
   const [actionRemarks, setActionRemarks] = useState("")
   const [actionLoading, setActionLoading] = useState(false)
@@ -121,6 +125,26 @@ export function StudentApplicationDetailPage() {
       await reload()
     } catch (err) {
       toast({ title: "Unable to withdraw", description: err instanceof ApiError ? err.message : "Please try again.", variant: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleResubmit() {
+    setActionLoading(true)
+    try {
+      await submitApplication(applicationId)
+      toast({
+        title: "Application resubmitted",
+        description: "Your corrected application has been resubmitted for review.",
+        variant: "success",
+      })
+      setConfirmSubmitOpen(false)
+      await reload()
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Unable to resubmit your application. Please try again."
+      toast({ title: "Unable to resubmit", description: message, variant: "error" })
     } finally {
       setActionLoading(false)
     }
@@ -195,17 +219,22 @@ export function StudentApplicationDetailPage() {
   if (!application) return null
 
   const cycle = application.program_cycle
-  const canReview = application.status === "draft"
-  const canWithdraw = application.status !== "withdrawn" && application.status !== "rejected" && application.status !== "completed"
-  const canUpload = ["draft", "documents_incomplete"].includes(application.status)
-  const canEditInfo = application.status === "draft" || application.status === "documents_incomplete"
+  const isCorrectionRequired = application.status === "returned_for_correction"
+  const isDraft = application.status === "draft"
+  const isRejected = application.status === "rejected"
+  const isSubmitted = application.status === "submitted"
+  const canReview = isDraft || isCorrectionRequired
+  const canWithdraw = !["withdrawn", "rejected", "completed", "approved"].includes(application.status)
+  const canUpload = ["draft", "returned_for_correction"].includes(application.status)
+  const canEditInfo = isDraft || isCorrectionRequired
+  const canResubmit = isCorrectionRequired
   const documents = application.documents ?? []
   const requirements = cycle?.requirements ?? []
   const requiredRequirements = requirements.filter((requirement) => requirement.is_required)
   const uploadedRequiredCount = requiredRequirements.filter((requirement) =>
     documents.some((document) => document.requirement_id === requirement.id),
   ).length
-  const isDocumentEditable = application.status === "draft" || application.status === "documents_incomplete"
+  const isDocumentEditable = isDraft || isCorrectionRequired
 
   function selectedRequirementConfig() {
     if (!selectedRequirement) return null
@@ -252,7 +281,13 @@ export function StudentApplicationDetailPage() {
           {canReview ? (
             <Button nativeButton={false} render={<Link to={`/student/applications/${applicationId}/review`} />}>
               <ClipboardCheck aria-hidden="true" />
-              Review & submit
+              {isCorrectionRequired ? "Review & resubmit" : "Review & submit"}
+            </Button>
+          ) : null}
+          {canResubmit ? (
+            <Button onClick={() => setConfirmSubmitOpen(true)}>
+              <Upload aria-hidden="true" />
+              Submit corrections
             </Button>
           ) : null}
           {canWithdraw ? (
@@ -276,7 +311,7 @@ export function StudentApplicationDetailPage() {
         </p>
       ) : null}
 
-      {application.status === "submitted" ? (
+      {isSubmitted ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -294,6 +329,51 @@ export function StudentApplicationDetailPage() {
         </Card>
       ) : null}
 
+      {isCorrectionRequired ? (
+        <Card className="border-amber-600/30 bg-amber-600/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="size-5" aria-hidden="true" />
+              Correction required
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-amber-700">
+              DOLE staff has returned your application for correction. Please review the feedback below
+              and make the necessary changes before resubmitting.
+            </p>
+            {application.decision_reason ? (
+              <div className="rounded-md bg-amber-50 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-600">Staff message</p>
+                <p className="mt-1 text-sm text-amber-800">{application.decision_reason}</p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isRejected ? (
+        <Card className="border-destructive/30 bg-destructive/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <XCircle className="size-5" aria-hidden="true" />
+              Application rejected
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-destructive/80">
+              Your application has been reviewed and unfortunately cannot be approved at this time.
+            </p>
+            {application.decision_reason ? (
+              <div className="rounded-md bg-destructive/5 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-destructive">Reason</p>
+                <p className="mt-1 text-sm text-destructive/80">{application.decision_reason}</p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {canEditInfo ? (
@@ -301,7 +381,9 @@ export function StudentApplicationDetailPage() {
               <CardHeader>
                 <CardTitle>Application information</CardTitle>
                 <CardDescription>
-                  Details specific to this application. Your draft is saved so you can return later.
+                  {isCorrectionRequired
+                    ? "Make any necessary corrections to your application information."
+                    : "Details specific to this application. Your draft is saved so you can return later."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -682,6 +764,28 @@ export function StudentApplicationDetailPage() {
         loading={actionLoading}
         onConfirm={handleDeleteDocument}
       />
+
+      <Dialog open={confirmSubmitOpen} onOpenChange={(open) => !actionLoading && setConfirmSubmitOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit corrections?</DialogTitle>
+            <DialogDescription>
+              Your corrected application will be resubmitted for staff review. You will not be able to
+              edit your application or modify its documents unless staff returns it for correction again.
+              Are you sure you want to resubmit?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmSubmitOpen(false)} disabled={actionLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleResubmit} disabled={actionLoading}>
+              {actionLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
+              {actionLoading ? "Submitting..." : "Submit corrections"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

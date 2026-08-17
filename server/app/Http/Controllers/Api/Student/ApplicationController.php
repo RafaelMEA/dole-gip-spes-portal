@@ -69,6 +69,7 @@ class ApplicationController extends Controller
             'statusHistory.changedBy',
             'deploymentAssignment.hostAgency',
             'deploymentAssignment.deploymentSite',
+            'decidedBy',
         ]);
 
         return new ApplicationResource($application);

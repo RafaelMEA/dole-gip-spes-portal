@@ -14,6 +14,8 @@ import { StaffCatalogPage } from "@/pages/staff/Catalog"
 import { StaffApplicationDetailPage } from "@/pages/staff/ApplicationDetail"
 import { StaffDashboardPage } from "@/pages/staff/Dashboard"
 import { StaffDeploymentsPage } from "@/pages/staff/Deployments"
+import { StaffHostAgencyDetailPage } from "@/pages/staff/HostAgencyDetail"
+import { StaffHostAgenciesPage } from "@/pages/staff/HostAgencies"
 import { StaffReviewQueuePage } from "@/pages/staff/ReviewQueue"
 import { StudentApplicationDetailPage } from "@/pages/student/ApplicationDetail"
 import { StudentApplicationReviewPage } from "@/pages/student/ApplicationReview"
@@ -76,6 +78,8 @@ function App() {
           <Route path="/staff/dashboard" element={<StaffDashboardPage />} />
           <Route path="/staff/review" element={<StaffReviewQueuePage />} />
           <Route path="/staff/applications/:id" element={<StaffApplicationDetailPage />} />
+          <Route path="/staff/host-agencies" element={<StaffHostAgenciesPage />} />
+          <Route path="/staff/host-agencies/:id" element={<StaffHostAgencyDetailPage />} />
           <Route path="/staff/deployments" element={<StaffDeploymentsPage />} />
           <Route path="/staff/catalog" element={<StaffCatalogPage />} />
         </Route>

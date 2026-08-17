@@ -51,7 +51,7 @@ export function StaffDeploymentsPage() {
   const { data: approvedPage } = useAsync(
     useCallback(() => fetchReviewQueue({ status: "approved", per_page: 100 }), []),
   )
-  const { data: agencies } = useAsync(fetchHostAgencies)
+  const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
   const { data: sites } = useAsync(fetchDeploymentSites)
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -291,7 +291,7 @@ export function StaffDeploymentsPage() {
                   <SelectValue placeholder="Select host agency" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(agencies ?? []).map((agency) => (
+                  {(agenciesPage?.data ?? []).map((agency) => (
                     <SelectItem key={agency.id} value={String(agency.id)}>
                       {agency.name}
                     </SelectItem>

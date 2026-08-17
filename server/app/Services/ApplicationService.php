@@ -23,9 +23,10 @@ class ApplicationService
      */
     private const TRANSITIONS = [
         'draft' => ['submitted', 'withdrawn'],
-        'submitted' => ['under_review', 'rejected', 'withdrawn'],
-        'under_review' => ['documents_incomplete', 'approved', 'rejected'],
+        'submitted' => ['under_review', 'rejected', 'withdrawn', 'returned_for_correction'],
+        'under_review' => ['documents_incomplete', 'approved', 'rejected', 'returned_for_correction'],
         'documents_incomplete' => ['submitted', 'approved', 'rejected'],
+        'returned_for_correction' => ['submitted', 'rejected'],
         'approved' => ['for_deployment'],
         'for_deployment' => ['deployed'],
         'deployed' => ['completed'],
@@ -66,6 +67,7 @@ class ApplicationService
             'resubmit' => ApplicationStatus::Submitted->value,
             'start_review' => ApplicationStatus::UnderReview->value,
             'request_documents' => ApplicationStatus::DocumentsIncomplete->value,
+            'return_for_correction' => ApplicationStatus::ReturnedForCorrection->value,
             'approve' => ApplicationStatus::Approved->value,
             'reject' => ApplicationStatus::Rejected->value,
             'schedule_deployment' => ApplicationStatus::ForDeployment->value,
@@ -97,7 +99,7 @@ class ApplicationService
         }
 
         return DB::transaction(function () use ($application, $user, $action, $remarks) {
-            $this->apply($application, $user, $action);
+            $this->apply($application, $user, $action, $remarks);
 
             $application->statusHistory()->create([
                 'status' => $application->status,
@@ -128,6 +130,14 @@ class ApplicationService
 
     public function resubmit(Application $application, User $user, ?string $remarks = null): Application
     {
+        if (! $this->canTransition($application, $user, 'resubmit')) {
+            throw new DomainException(
+                "The application cannot move from \"{$application->status->value}\" via \"resubmit\".",
+            );
+        }
+
+        $this->assertEligibleForSubmission($application);
+
         return $this->transition($application, $user, 'resubmit', $remarks);
     }
 
@@ -150,8 +160,19 @@ class ApplicationService
         return $this->transition($application, $user, 'request_documents', $remarks);
     }
 
+    public function returnForCorrection(Application $application, User $user, string $remarks): Application
+    {
+        if (trim($remarks) === '') {
+            throw new DomainException('A reason is required before returning an application for correction.');
+        }
+
+        return $this->transition($application, $user, 'return_for_correction', $remarks);
+    }
+
     public function approve(Application $application, User $user, ?string $remarks = null): Application
     {
+        $this->assertCanBeApproved($application);
+
         $application = $this->transition($application, $user, 'approve', $remarks);
 
         $application->forceFill([
@@ -168,7 +189,15 @@ class ApplicationService
             throw new DomainException('A reason is required before rejecting an application.');
         }
 
-        return $this->transition($application, $user, 'reject', $remarks);
+        $application = $this->transition($application, $user, 'reject', $remarks);
+
+        $application->forceFill([
+            'decision_reason' => $remarks,
+            'decided_by' => $user->id,
+            'decided_at' => now(),
+        ])->save();
+
+        return $application;
     }
 
     public function scheduleForDeployment(Application $application, User $user, ?string $remarks = null): Application
@@ -220,6 +249,70 @@ class ApplicationService
     }
 
     /**
+     * Validate that an application can be approved.
+     *
+     * Before approval, all required documents must be verified (not pending
+     * or rejected). This prevents approving applications with unresolved
+     * document issues.
+     */
+    private function assertCanBeApproved(Application $application): void
+    {
+        $cycle = $application->programCycle;
+
+        if ($cycle === null) {
+            throw new DomainException('Application has no associated program cycle.');
+        }
+
+        $requiredRequirements = $cycle->requirements()
+            ->wherePivot('is_required', true)
+            ->get();
+
+        $documents = $application->documents()->get();
+
+        $missingDocuments = [];
+        $rejectedDocuments = [];
+        $pendingDocuments = [];
+
+        foreach ($requiredRequirements as $requirement) {
+            $document = $documents->firstWhere('requirement_id', $requirement->id);
+
+            if ($document === null) {
+                $missingDocuments[] = $requirement->name;
+            } elseif ($document->verification_status->value === 'rejected') {
+                $rejectedDocuments[] = $requirement->name;
+            } elseif ($document->verification_status->value === 'pending') {
+                $pendingDocuments[] = $requirement->name;
+            }
+        }
+
+        $issues = [];
+
+        if ($missingDocuments !== []) {
+            $issues[] = count($missingDocuments).' required document'.(
+                count($missingDocuments) === 1 ? ' is' : 's are'
+            ).' missing: '.implode(', ', $missingDocuments);
+        }
+
+        if ($rejectedDocuments !== []) {
+            $issues[] = count($rejectedDocuments).' required document'.(
+                count($rejectedDocuments) === 1 ? ' has' : 's have'
+            ).' been rejected: '.implode(', ', $rejectedDocuments);
+        }
+
+        if ($pendingDocuments !== []) {
+            $issues[] = count($pendingDocuments).' required document'.(
+                count($pendingDocuments) === 1 ? ' is' : 's are'
+            ).' still pending verification: '.implode(', ', $pendingDocuments);
+        }
+
+        if ($issues !== []) {
+            throw new DomainException(
+                'Application cannot be approved. '.implode(' ', $issues).'.',
+            );
+        }
+    }
+
+    /**
      * All required documents for this application's cycle that are not yet
      * verified. Empty array means the application is document-complete.
      *
@@ -248,13 +341,14 @@ class ApplicationService
     /**
      * Apply the side effects of the transition on the model.
      */
-    private function apply(Application $application, User $user, string $action): void
+    private function apply(Application $application, User $user, string $action, ?string $remarks = null): void
     {
         $status = match ($action) {
             'submit', 'resubmit' => ApplicationStatus::Submitted,
             'withdraw' => ApplicationStatus::Withdrawn,
             'start_review' => ApplicationStatus::UnderReview,
             'request_documents' => ApplicationStatus::DocumentsIncomplete,
+            'return_for_correction' => ApplicationStatus::ReturnedForCorrection,
             'approve' => ApplicationStatus::Approved,
             'reject' => ApplicationStatus::Rejected,
             'schedule_deployment' => ApplicationStatus::ForDeployment,
@@ -267,6 +361,12 @@ class ApplicationService
 
         if ($status === ApplicationStatus::Submitted) {
             $application->submitted_at = now();
+        }
+
+        if ($status === ApplicationStatus::ReturnedForCorrection && $remarks !== null) {
+            $application->decision_reason = $remarks;
+            $application->decided_by = $user->id;
+            $application->decided_at = now();
         }
 
         $application->save();
@@ -282,7 +382,7 @@ class ApplicationService
         return in_array($from, [
             ApplicationStatus::Draft->value,
             ApplicationStatus::Submitted->value,
-            ApplicationStatus::DocumentsIncomplete->value,
+            ApplicationStatus::ReturnedForCorrection->value,
         ], true);
     }
 }

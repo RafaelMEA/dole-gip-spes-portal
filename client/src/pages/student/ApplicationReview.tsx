@@ -180,7 +180,7 @@ export function StudentApplicationReviewPage() {
     </Button>
   )
 
-  if (application.status !== "draft") {
+  if (application.status !== "draft" && application.status !== "returned_for_correction") {
     return (
       <div className="space-y-6">
         {backLink}

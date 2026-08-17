@@ -35,7 +35,7 @@ class ApplicationDocumentPolicy
             && $application->applicant_id === $user->id
             && in_array($application->status, [
                 ApplicationStatus::Draft,
-                ApplicationStatus::DocumentsIncomplete,
+                ApplicationStatus::ReturnedForCorrection,
             ], true);
     }
 
@@ -81,7 +81,7 @@ class ApplicationDocumentPolicy
             && in_array($document->verification_status->value, ['pending', 'rejected'], true)
             && in_array($document->application->status, [
                 ApplicationStatus::Draft,
-                ApplicationStatus::DocumentsIncomplete,
+                ApplicationStatus::ReturnedForCorrection,
             ], true);
     }
 }

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Fillable([
     'applicant_id', 'program_cycle_id', 'status', 'remarks',
     'submitted_at', 'approved_at', 'approved_by',
+    'decision_reason', 'decided_by', 'decided_at',
 ])]
 class Application extends Model
 {
@@ -26,6 +27,11 @@ class Application extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function decidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'decided_by');
     }
 
     public function programCycle(): BelongsTo
@@ -59,6 +65,7 @@ class Application extends Model
             'status' => ApplicationStatus::class,
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
+            'decided_at' => 'datetime',
         ];
     }
 

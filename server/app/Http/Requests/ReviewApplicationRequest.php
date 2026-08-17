@@ -13,6 +13,7 @@ class ReviewApplicationRequest extends FormRequest
     private const ACTIONS = [
         'start_review',
         'request_documents',
+        'return_for_correction',
         'approve',
         'reject',
         'schedule_deployment',
@@ -36,7 +37,7 @@ class ReviewApplicationRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:2000',
-                'required_if:action,reject,request_documents',
+                'required_if:action,reject,request_documents,return_for_correction',
             ],
         ];
     }

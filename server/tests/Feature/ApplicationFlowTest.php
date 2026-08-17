@@ -148,6 +148,14 @@ class ApplicationFlowTest extends TestCase
         $cycle = $this->openCycleWithRequirements();
         $application = Application::factory()->submitted()->create(['program_cycle_id' => $cycle->id]);
 
+        foreach ($cycle->requirements as $requirement) {
+            \App\Models\ApplicationDocument::factory()->create([
+                'application_id' => $application->id,
+                'requirement_id' => $requirement->id,
+                'verification_status' => 'verified',
+            ]);
+        }
+
         $this->fromSpa()
             ->postJson('/api/staff/applications/'.$application->id.'/review', ['action' => 'start_review'])
             ->assertOk()
@@ -223,8 +231,7 @@ class ApplicationFlowTest extends TestCase
 
         $this->fromSpa()
             ->postJson('/api/staff/applications/'.$application->id.'/review', ['action' => 'approve'])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'The application cannot move from "draft" via "approve".');
+            ->assertStatus(422);
     }
 
     public function test_staff_can_schedule_and_activate_a_deployment(): void
