@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import {
   createDeployment,
-  fetchDeploymentSites,
+  fetchDeploymentSitesAll,
   fetchDeployments,
   fetchHostAgencies,
   fetchReviewQueue,
@@ -52,7 +52,7 @@ export function StaffDeploymentsPage() {
     useCallback(() => fetchReviewQueue({ status: "approved", per_page: 100 }), []),
   )
   const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
-  const { data: sites } = useAsync(fetchDeploymentSites)
+  const { data: sites } = useAsync(fetchDeploymentSitesAll)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)

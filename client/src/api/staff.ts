@@ -5,6 +5,7 @@ import type {
   ApplicationDocument,
   DeploymentAssignment,
   DeploymentSite,
+  DeploymentSiteFilters,
   DocumentVerificationAction,
   DocumentVerificationRequest,
   HostAgency,
@@ -167,9 +168,28 @@ export async function fetchHostAgency(id: number): Promise<HostAgency> {
   return unwrap(response)
 }
 
-export async function fetchDeploymentSites(): Promise<DeploymentSite[]> {
-  const response = await apiRequest<ApiEnvelope<DeploymentSite[]>>("/api/staff/catalog/deployment-sites")
+export async function fetchDeploymentSites(filters: DeploymentSiteFilters = {}): Promise<Paginated<DeploymentSite>> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value))
+    }
+  }
+  const qs = params.toString()
+  const response = await apiRequest<Paginated<DeploymentSite>>(
+    `/api/staff/catalog/deployment-sites${qs ? `?${qs}` : ""}`,
+  )
+  return response
+}
+
+export async function fetchDeploymentSitesAll(): Promise<DeploymentSite[]> {
+  const response = await apiRequest<Paginated<DeploymentSite>>("/api/staff/catalog/deployment-sites?per_page=100")
   return response.data
+}
+
+export async function fetchDeploymentSite(id: number): Promise<DeploymentSite> {
+  const response = await apiRequest<ApiEnvelope<DeploymentSite>>(`/api/staff/catalog/deployment-sites/${id}`)
+  return unwrap(response)
 }
 
 export interface CatalogPayload {
@@ -386,7 +406,20 @@ export async function updateHostAgencyStatus(id: number, isActive: boolean): Pro
   return unwrap(response)
 }
 
-export async function createDeploymentSite(payload: Partial<DeploymentSite>): Promise<DeploymentSite> {
+export interface DeploymentSitePayload {
+  host_agency_id: number
+  name: string
+  address?: string
+  city?: string
+  region?: string
+  contact_person?: string
+  contact_number?: string
+  email?: string
+  description?: string
+  is_active?: boolean
+}
+
+export async function createDeploymentSite(payload: DeploymentSitePayload): Promise<DeploymentSite> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<DeploymentSite>>(
     "/api/staff/catalog/deployment-sites",
@@ -397,12 +430,21 @@ export async function createDeploymentSite(payload: Partial<DeploymentSite>): Pr
 
 export async function updateDeploymentSite(
   id: number,
-  payload: Partial<DeploymentSite>,
+  payload: Partial<DeploymentSitePayload>,
 ): Promise<DeploymentSite> {
   await requestCsrfCookie()
   const response = await apiRequest<ApiEnvelope<DeploymentSite>>(
     `/api/staff/catalog/deployment-sites/${id}`,
     { method: "PUT", body: JSON.stringify(payload) },
+  )
+  return unwrap(response)
+}
+
+export async function updateDeploymentSiteStatus(id: number, isActive: boolean): Promise<DeploymentSite> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentSite>>(
+    `/api/staff/catalog/deployment-sites/${id}/status`,
+    { method: "PATCH", body: JSON.stringify({ is_active: isActive }) },
   )
   return unwrap(response)
 }

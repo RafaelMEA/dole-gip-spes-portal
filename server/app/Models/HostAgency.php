@@ -15,12 +15,21 @@ class HostAgency extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
     protected function casts(): array
     {
         return [
             'agency_type' => HostAgencyType::class,
             'is_active' => 'boolean',
         ];
+    }
+
+    public function deploymentSites(): HasMany
+    {
+        return $this->hasMany(DeploymentSite::class);
     }
 
     public function deploymentAssignments(): HasMany

@@ -13,6 +13,8 @@ import { RegisterPage } from "@/pages/auth/Register"
 import { StaffCatalogPage } from "@/pages/staff/Catalog"
 import { StaffApplicationDetailPage } from "@/pages/staff/ApplicationDetail"
 import { StaffDashboardPage } from "@/pages/staff/Dashboard"
+import { StaffDeploymentSitesPage } from "@/pages/staff/DeploymentSites"
+import { StaffDeploymentSiteDetailPage } from "@/pages/staff/DeploymentSiteDetail"
 import { StaffDeploymentsPage } from "@/pages/staff/Deployments"
 import { StaffHostAgencyDetailPage } from "@/pages/staff/HostAgencyDetail"
 import { StaffHostAgenciesPage } from "@/pages/staff/HostAgencies"
@@ -80,6 +82,8 @@ function App() {
           <Route path="/staff/applications/:id" element={<StaffApplicationDetailPage />} />
           <Route path="/staff/host-agencies" element={<StaffHostAgenciesPage />} />
           <Route path="/staff/host-agencies/:id" element={<StaffHostAgencyDetailPage />} />
+          <Route path="/staff/deployment-sites" element={<StaffDeploymentSitesPage />} />
+          <Route path="/staff/deployment-sites/:id" element={<StaffDeploymentSiteDetailPage />} />
           <Route path="/staff/deployments" element={<StaffDeploymentsPage />} />
           <Route path="/staff/catalog" element={<StaffCatalogPage />} />
         </Route>

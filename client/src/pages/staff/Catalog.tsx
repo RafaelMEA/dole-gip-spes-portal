@@ -36,7 +36,7 @@ import {
   updateProgram,
   updateRequirement,
 } from "@/api/staff"
-import type { CatalogPayload, CyclePayload, RequirementPayload, HostAgencyPayload } from "@/api/staff"
+import type { CatalogPayload, CyclePayload, RequirementPayload, HostAgencyPayload, DeploymentSitePayload } from "@/api/staff"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
 import { formatDate, formatMaxUploadSize } from "@/lib/format"
@@ -55,7 +55,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { CycleStatusBadge } from "@/components/StatusBadge"
 import { useToast } from "@/toast/useToast"
-import type { DeploymentSite, HostAgency, ProgramCycle, Requirement } from "@/types/api"
+import type { HostAgency, ProgramCycle, Requirement } from "@/types/api"
 import { CycleRequirementsDialog } from "./CycleRequirementsDialog"
 
 type TabValue = "programs" | "cycles" | "requirements" | "agencies" | "sites"
@@ -96,8 +96,18 @@ interface RequirementForm {
 interface AgencyForm extends Partial<HostAgency> {
   id?: number
 }
-interface SiteForm extends Partial<DeploymentSite> {
+interface SiteForm {
   id?: number
+  host_agency_id: number
+  name: string
+  address: string | null
+  city: string | null
+  region: string | null
+  contact_person: string | null
+  contact_number: string | null
+  email: string | null
+  description: string | null
+  is_active: boolean
 }
 interface CycleForm extends CyclePayload {
   id?: number
@@ -114,7 +124,7 @@ const emptyRequirement: RequirementForm = {
   max_file_size: "",
 }
 const emptyAgency: AgencyForm = { name: "", address: "", contact_person: "", contact_number: "", email: "", is_active: true }
-const emptySite: SiteForm = { name: "", address: "", city: "", region: "", is_active: true }
+const emptySite: SiteForm = { host_agency_id: 0, name: "", address: "", city: "", region: "", contact_person: "", contact_number: "", email: "", description: "", is_active: true }
 
 function emptyCycle(): CycleForm {
   return {
@@ -153,7 +163,8 @@ export function StaffCatalogPage() {
   const { data: cycles, loading: cyclesLoading, error: cyclesError, reload: reloadCycles } = useAsync(fetchCyclesCatalog)
   const { data: requirements, loading: requirementsLoading, error: requirementsError, reload: reloadRequirements } = useAsync(fetchRequirementsCatalog)
   const { data: agenciesPage, loading: agenciesLoading, error: agenciesError, reload: reloadAgencies } = useAsync(() => fetchHostAgencies({ per_page: 100 }))
-  const { data: sites, loading: sitesLoading, error: sitesError, reload: reloadSites } = useAsync(fetchDeploymentSites)
+  const { data: sitesPage, loading: sitesLoading, error: sitesError, reload: reloadSites } = useAsync(() => fetchDeploymentSites({ per_page: 100 }))
+  const sites = sitesPage?.data ?? []
 
   const [programModal, setProgramModal] = useState<{ open: boolean; form: ProgramForm }>({ open: false, form: emptyProgram })
   const [requirementModal, setRequirementModal] = useState<{ open: boolean; form: RequirementForm }>({ open: false, form: emptyRequirement })
@@ -260,7 +271,10 @@ export function StaffCatalogPage() {
   }
 
   function saveSite() {
-    const { id, ...payload } = siteModal.form
+    const { id, ...rest } = siteModal.form
+    const payload = Object.fromEntries(
+      Object.entries(rest).map(([key, value]) => [key, value === null ? undefined : value]),
+    ) as unknown as DeploymentSitePayload
     void run(
       () => (id ? updateDeploymentSite(id, payload) : createDeploymentSite(payload)),
       id ? "Deployment site updated." : "Deployment site created.",
@@ -764,12 +778,28 @@ export function StaffCatalogPage() {
       </Dialog>
 
       <Dialog open={siteModal.open} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{siteModal.form.id ? "Edit deployment site" : "New deployment site"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {modalError ? <FormError message={modalError} /> : null}
+            <div className="space-y-2">
+              <Label htmlFor="site-agency">Host Agency *</Label>
+              <Select
+                value={siteModal.form.host_agency_id ? String(siteModal.form.host_agency_id) : ""}
+                onValueChange={(value) => setSiteModal({ ...siteModal, form: { ...siteModal.form, host_agency_id: Number(value) } })}
+              >
+                <SelectTrigger id="site-agency">
+                  <SelectValue placeholder="Select host agency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(agenciesPage?.data ?? []).map((agency) => (
+                    <SelectItem key={agency.id} value={String(agency.id)}>{agency.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="site-name">Name</Label>
               <Input id="site-name" value={siteModal.form.name ?? ""} onChange={(e) => setSiteModal({ ...siteModal, form: { ...siteModal.form, name: e.target.value } })} />

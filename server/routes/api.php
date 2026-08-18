@@ -124,6 +124,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/catalog/deployment-sites', [CatalogController::class, 'deploymentSites']);
         Route::post('/catalog/deployment-sites', [CatalogController::class, 'storeDeploymentSite']);
+        Route::get('/catalog/deployment-sites/{site}', [CatalogController::class, 'showDeploymentSite']);
         Route::put('/catalog/deployment-sites/{site}', [CatalogController::class, 'updateDeploymentSite']);
+        Route::patch('/catalog/deployment-sites/{site}/status', [CatalogController::class, 'updateDeploymentSiteStatus']);
     });
 });

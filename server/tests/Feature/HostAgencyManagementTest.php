@@ -166,8 +166,8 @@ class HostAgencyManagementTest extends TestCase
     public function test_list_searches_by_email(): void
     {
         $this->loginAsStaff();
-        HostAgency::factory()->create(['email' => 'office@example.com']);
-        HostAgency::factory()->create(['email' => 'hospital@example.com']);
+        HostAgency::factory()->create(['name' => 'Alpha Corp', 'email' => 'office@example.com']);
+        HostAgency::factory()->create(['name' => 'Beta Corp', 'email' => 'hospital@example.com']);
 
         $this->fromSpa()
             ->getJson('/api/staff/catalog/host-agencies?search=office')

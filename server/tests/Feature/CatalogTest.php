@@ -66,9 +66,11 @@ class CatalogTest extends TestCase
     public function test_staff_can_create_a_deployment_site_and_requirement(): void
     {
         $this->loginAsStaff();
+        $agency = \App\Models\HostAgency::factory()->create();
 
         $this->fromSpa()
             ->postJson('/api/staff/catalog/deployment-sites', [
+                'host_agency_id' => $agency->id,
                 'name' => 'Municipal Hall',
                 'city' => 'San Fernando',
             ])

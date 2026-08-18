@@ -10,6 +10,7 @@ import {
   Library,
   Loader2,
   LogOut,
+  MapPin,
   Menu,
   User,
   X,
@@ -48,6 +49,7 @@ export function Sidebar() {
           { to: dashboardPath, label: "Dashboard", icon: LayoutDashboard, end: true },
           { to: "/staff/review", label: "Review applications", icon: ClipboardList },
           { to: "/staff/host-agencies", label: "Host agencies", icon: Building },
+          { to: "/staff/deployment-sites", label: "Deployment sites", icon: MapPin },
           { to: "/staff/deployments", label: "Deployments", icon: Building2 },
           { to: "/staff/catalog", label: "Catalog", icon: Library },
         ]

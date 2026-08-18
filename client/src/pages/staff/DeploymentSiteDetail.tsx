@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import { useNavigate, useParams, Link } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Building,
@@ -9,18 +9,24 @@ import {
   Mail,
   MapPin,
   Phone,
-  Plus,
   ToggleLeft,
   ToggleRight,
   User,
 } from "lucide-react"
-import { fetchHostAgency, fetchDeploymentSites, updateHostAgency, updateHostAgencyStatus, type HostAgencyPayload } from "@/api/staff"
+import {
+  fetchDeploymentSite,
+  fetchHostAgencies,
+  updateDeploymentSite,
+  updateDeploymentSiteStatus,
+  type DeploymentSitePayload,
+} from "@/api/staff"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -29,29 +35,21 @@ import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
 import { formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { HostAgencyType } from "@/types/api"
 
-const AGENCY_TYPES: { value: HostAgencyType; label: string }[] = [
-  { value: "government", label: "Government" },
-  { value: "private", label: "Private" },
-  { value: "ngo", label: "NGO" },
-  { value: "other", label: "Other" },
-]
-
-export function StaffHostAgencyDetailPage() {
+export function StaffDeploymentSiteDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
 
-  const fetcher = useCallback(() => fetchHostAgency(Number(id)), [id])
-  const { data: agency, loading, error, reload } = useAsync(fetcher)
+  const fetcher = useCallback(() => fetchDeploymentSite(Number(id)), [id])
+  const { data: site, loading, error, reload } = useAsync(fetcher)
 
-  const fetcherSites = useCallback(() => fetchDeploymentSites({ host_agency_id: Number(id), per_page: 100 }), [id])
-  const { data: sitesPage, loading: sitesLoading } = useAsync(fetcherSites)
-  const sites = sitesPage?.data ?? []
+  const fetcherAgencies = useCallback(() => fetchHostAgencies({ per_page: 100 }), [])
+  const { data: agenciesPage } = useAsync(fetcherAgencies)
+  const agencies = agenciesPage?.data ?? []
 
   const [editOpen, setEditOpen] = useState(false)
-  const [form, setForm] = useState<Partial<HostAgencyPayload>>({})
+  const [form, setForm] = useState<Partial<DeploymentSitePayload>>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -59,14 +57,17 @@ export function StaffHostAgencyDetailPage() {
   const [toggling, setToggling] = useState(false)
 
   function openEdit() {
-    if (!agency) return
+    if (!site) return
     setForm({
-      name: agency.name,
-      agency_type: agency.agency_type,
-      address: agency.address ?? "",
-      contact_person: agency.contact_person ?? "",
-      contact_number: agency.contact_number ?? "",
-      email: agency.email ?? "",
+      host_agency_id: site.host_agency_id,
+      name: site.name,
+      address: site.address ?? "",
+      city: site.city ?? "",
+      region: site.region ?? "",
+      contact_person: site.contact_person ?? "",
+      contact_number: site.contact_number ?? "",
+      email: site.email ?? "",
+      description: site.description ?? "",
     })
     setSaveError(null)
     setEditOpen(true)
@@ -74,14 +75,18 @@ export function StaffHostAgencyDetailPage() {
 
   async function handleSave() {
     if (!form.name?.trim()) {
-      setSaveError("Agency name is required.")
+      setSaveError("Site name is required.")
+      return
+    }
+    if (!form.host_agency_id) {
+      setSaveError("Host agency is required.")
       return
     }
     setSaving(true)
     setSaveError(null)
     try {
-      await updateHostAgency(Number(id), form)
-      toast({ title: "Host agency updated.", variant: "success" })
+      await updateDeploymentSite(Number(id), form)
+      toast({ title: "Deployment site updated.", variant: "success" })
       setEditOpen(false)
       reload()
     } catch (err) {
@@ -98,12 +103,12 @@ export function StaffHostAgencyDetailPage() {
   }
 
   async function handleToggleStatus() {
-    if (!agency) return
+    if (!site) return
     setToggling(true)
     try {
-      await updateHostAgencyStatus(agency.id, !agency.is_active)
+      await updateDeploymentSiteStatus(site.id, !site.is_active)
       toast({
-        title: agency.is_active ? "Host agency deactivated." : "Host agency activated.",
+        title: site.is_active ? "Deployment site deactivated." : "Deployment site activated.",
         variant: "success",
       })
       setStatusDialogOpen(false)
@@ -120,9 +125,9 @@ export function StaffHostAgencyDetailPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/staff/host-agencies")}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/staff/deployment-sites")}>
           <ArrowLeft className="mr-1.5 size-4" aria-hidden="true" />
-          Back to agencies
+          Back to sites
         </Button>
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {error.message}
@@ -130,37 +135,41 @@ export function StaffHostAgencyDetailPage() {
       </div>
     )
   }
-  if (!agency) return null
+  if (!site) return null
 
   const infoItems = [
-    agency.agency_type_label ? { icon: Building, label: "Agency Type", value: agency.agency_type_label } : null,
-    agency.address ? { icon: MapPin, label: "Address", value: agency.address } : null,
-    agency.contact_person ? { icon: User, label: "Contact Person", value: agency.contact_person } : null,
-    agency.contact_number ? { icon: Phone, label: "Contact Number", value: agency.contact_number } : null,
-    agency.email ? { icon: Mail, label: "Email", value: agency.email } : null,
-    agency.created_at ? { icon: Calendar, label: "Created", value: formatDate(agency.created_at) } : null,
-  ].filter(Boolean) as { icon: typeof Building; label: string; value: string }[]
+    site.host_agency ? { icon: Building, label: "Host Agency", value: site.host_agency.name } : null,
+    site.address ? { icon: MapPin, label: "Address", value: site.address } : null,
+    [site.city, site.region].filter(Boolean).length > 0
+      ? { icon: MapPin, label: "Location", value: [site.city, site.region].filter(Boolean).join(", ") }
+      : null,
+    site.contact_person ? { icon: User, label: "Contact Person", value: site.contact_person } : null,
+    site.contact_number ? { icon: Phone, label: "Contact Number", value: site.contact_number } : null,
+    site.email ? { icon: Mail, label: "Email", value: site.email } : null,
+    site.description ? { icon: null, label: "Description", value: site.description } : null,
+    site.created_at ? { icon: Calendar, label: "Created", value: formatDate(site.created_at) } : null,
+  ].filter(Boolean) as { icon: typeof Building | null; label: string; value: string }[]
 
   return (
     <div className="space-y-6">
       <div>
-        <Button variant="ghost" size="sm" onClick={() => navigate("/staff/host-agencies")}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/staff/deployment-sites")}>
           <ArrowLeft className="mr-1.5 size-4" aria-hidden="true" />
-          Back to agencies
+          Back to sites
         </Button>
       </div>
 
-      <PageHeader title={agency.name} description={agency.address ?? undefined}>
+      <PageHeader title={site.name} description={site.host_agency?.name ?? undefined}>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={openEdit}>
             <Edit className="mr-1.5 size-4" aria-hidden="true" />
             Edit
           </Button>
           <Button
-            variant={agency.is_active ? "outline" : "default"}
+            variant={site.is_active ? "outline" : "default"}
             onClick={openStatusDialog}
           >
-            {agency.is_active ? (
+            {site.is_active ? (
               <>
                 <ToggleRight className="mr-1.5 size-4" aria-hidden="true" />
                 Deactivate
@@ -179,18 +188,13 @@ export function StaffHostAgencyDetailPage() {
         <span
           className={cn(
             "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-            agency.is_active
+            site.is_active
               ? "bg-emerald-100 text-emerald-700"
               : "bg-zinc-100 text-zinc-600",
           )}
         >
-          {agency.is_active ? "ACTIVE" : "INACTIVE"}
+          {site.is_active ? "ACTIVE" : "INACTIVE"}
         </span>
-        {agency.active_assignments > 0 ? (
-          <span className="text-sm text-muted-foreground">
-            {agency.active_assignments} active assignment{agency.active_assignments === 1 ? "" : "s"}
-          </span>
-        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -200,8 +204,8 @@ export function StaffHostAgencyDetailPage() {
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Details</h3>
               <dl className="grid gap-4 sm:grid-cols-2">
                 {infoItems.map((item) => (
-                  <div key={item.label} className="flex items-start gap-3">
-                    <item.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <div key={item.label} className={cn("flex items-start gap-3", item.label === "Description" && "sm:col-span-2")}>
+                    {item.icon ? <item.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
                     <div>
                       <dt className="text-xs text-muted-foreground">{item.label}</dt>
                       <dd className="text-sm font-medium">{item.value}</dd>
@@ -216,59 +220,12 @@ export function StaffHostAgencyDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardContent className="p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Deployment Sites
-                </h3>
-                <Link
-                  to={`/staff/deployment-sites?host_agency_id=${agency.id}`}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  View all
-                </Link>
-              </div>
-              {sitesLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              ) : sites.length === 0 ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    No deployment sites configured yet.
-                  </p>
-                  <Link
-                    to="/staff/deployment-sites"
-                    className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                  >
-                    <Plus className="size-3.5" aria-hidden="true" />
-                    Add Deployment Site
-                  </Link>
-                </>
-              ) : (
-                <ul className="space-y-2">
-                  {sites.map((site) => (
-                    <li key={site.id}>
-                      <Link
-                        to={`/staff/deployment-sites/${site.id}`}
-                        className="flex items-center gap-2 rounded-md border p-2.5 text-sm transition-colors hover:bg-muted/50"
-                      >
-                        <MapPin className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{site.name}</p>
-                          {site.address ? (
-                            <p className="text-xs text-muted-foreground truncate">{site.address}</p>
-                          ) : null}
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            site.is_active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-600"
-                          }`}
-                        >
-                          {site.is_active ? "Active" : "Inactive"}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Deployment Slots
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                No deployment slots configured yet.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -277,8 +234,8 @@ export function StaffHostAgencyDetailPage() {
       <Dialog open={editOpen} onOpenChange={(open) => !open && setEditOpen(false)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit host agency</DialogTitle>
-            <DialogDescription>Update the agency details.</DialogDescription>
+            <DialogTitle>Edit deployment site</DialogTitle>
+            <DialogDescription>Update the site details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {saveError ? (
@@ -287,28 +244,28 @@ export function StaffHostAgencyDetailPage() {
               </p>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Agency Name *</Label>
+              <Label htmlFor="edit-agency">Host Agency *</Label>
+              <Select
+                value={form.host_agency_id ? String(form.host_agency_id) : ""}
+                onValueChange={(value) => setForm({ ...form, host_agency_id: Number(value) })}
+              >
+                <SelectTrigger id="edit-agency">
+                  <SelectValue placeholder="Select host agency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={String(agency.id)}>{agency.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Site Name *</Label>
               <Input
                 id="edit-name"
                 value={form.name ?? ""}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-type">Agency Type</Label>
-              <Select
-                value={form.agency_type ?? "other"}
-                onValueChange={(value) => setForm({ ...form, agency_type: value as HostAgencyType })}
-              >
-                <SelectTrigger id="edit-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AGENCY_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-address">Address</Label>
@@ -317,6 +274,24 @@ export function StaffHostAgencyDetailPage() {
                 value={form.address ?? ""}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-city">City</Label>
+                <Input
+                  id="edit-city"
+                  value={form.city ?? ""}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-region">Region</Label>
+                <Input
+                  id="edit-region"
+                  value={form.region ?? ""}
+                  onChange={(e) => setForm({ ...form, region: e.target.value })}
+                />
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -345,6 +320,14 @@ export function StaffHostAgencyDetailPage() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={form.description ?? ""}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
@@ -359,14 +342,14 @@ export function StaffHostAgencyDetailPage() {
       <ConfirmDialog
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
-        title={agency.is_active ? "Deactivate Host Agency?" : "Activate Host Agency?"}
+        title={site.is_active ? "Deactivate Deployment Site?" : "Activate Deployment Site?"}
         description={
-          agency.is_active
-            ? "This agency will no longer be available for new deployment assignments."
-            : "This agency will be available again for new deployment assignments."
+          site.is_active
+            ? "This site will no longer be available for new deployment assignments."
+            : "This site will be available again for new deployment assignments."
         }
-        confirmLabel={agency.is_active ? "Deactivate" : "Activate"}
-        destructive={agency.is_active}
+        confirmLabel={site.is_active ? "Deactivate" : "Activate"}
+        destructive={site.is_active}
         loading={toggling}
         onConfirm={handleToggleStatus}
       />

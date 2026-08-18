@@ -425,7 +425,52 @@ class CatalogController extends Controller
     {
         $this->authorize('viewAny', DeploymentSite::class);
 
-        return DeploymentSiteResource::collection(DeploymentSite::orderBy('name')->get());
+        $query = DeploymentSite::with('hostAgency');
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->trim()->lower();
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(deployment_sites.name) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(deployment_sites.address) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(deployment_sites.contact_person) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(deployment_sites.email) LIKE ?', ["%{$search}%"])
+                    ->orWhereHas('hostAgency', function ($hq) use ($search) {
+                        $hq->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"]);
+                    });
+            });
+        }
+
+        if ($request->filled('host_agency_id')) {
+            $query->where('host_agency_id', $request->integer('host_agency_id'));
+        }
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('is_active', $request->input('status') === 'active');
+        }
+
+        $sort = $request->input('sort', 'name');
+        $direction = $request->input('direction', 'asc');
+        $allowedSorts = ['name', 'created_at', 'updated_at'];
+
+        if (in_array($sort, $allowedSorts, true)) {
+            $query->orderBy("deployment_sites.{$sort}", $direction === 'desc' ? 'desc' : 'asc');
+        } else {
+            $query->orderBy('deployment_sites.name');
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 20;
+
+        return DeploymentSiteResource::collection($query->paginate($perPage));
+    }
+
+    public function showDeploymentSite(DeploymentSite $site)
+    {
+        $this->authorize('view', $site);
+
+        $site->load('hostAgency');
+
+        return new DeploymentSiteResource($site);
     }
 
     public function storeDeploymentSite(StoreDeploymentSiteRequest $request)
@@ -434,7 +479,7 @@ class CatalogController extends Controller
 
         $site = DeploymentSite::create($request->validated());
 
-        return (new DeploymentSiteResource($site))->response()->setStatusCode(201);
+        return (new DeploymentSiteResource($site->load('hostAgency')))->response()->setStatusCode(201);
     }
 
     public function updateDeploymentSite(DeploymentSite $site, StoreDeploymentSiteRequest $request)
@@ -443,6 +488,19 @@ class CatalogController extends Controller
 
         $site->update($request->validated());
 
-        return new DeploymentSiteResource($site);
+        return new DeploymentSiteResource($site->load('hostAgency'));
+    }
+
+    public function updateDeploymentSiteStatus(DeploymentSite $site, Request $request)
+    {
+        $this->authorize('manage', $site);
+
+        $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $site->update(['is_active' => $request->boolean('is_active')]);
+
+        return new DeploymentSiteResource($site->load('hostAgency'));
     }
 }

@@ -27,7 +27,7 @@ class DeploymentSitePolicy
         return $user->isStaff();
     }
 
-    public function delete(User $user, DeploymentSite $site): bool
+    public function manage(User $user, DeploymentSite $site): bool
     {
         return $user->isStaff();
     }

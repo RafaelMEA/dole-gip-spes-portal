@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import {
   createDeployment,
-  fetchDeploymentSites,
+  fetchDeploymentSitesAll,
   fetchHostAgencies,
   fetchStaffApplication,
   reviewApplication,
@@ -166,7 +166,7 @@ export function StaffApplicationDetailPage() {
   const { data: application, loading, error, reload } = useAsync(fetcher)
 
   const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
-  const { data: sites } = useAsync(fetchDeploymentSites)
+  const { data: sites } = useAsync(fetchDeploymentSitesAll)
 
   const [activeAction, setActiveAction] = useState<ActionModal | null>(null)
   const [remarks, setRemarks] = useState("")

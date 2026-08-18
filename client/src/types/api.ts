@@ -22,9 +22,21 @@ export type HostAgencyType = "government" | "private" | "ngo" | "other"
 
 export type HostAgencyStatusFilter = "all" | "active" | "inactive"
 
+export type DeploymentSiteStatusFilter = "all" | "active" | "inactive"
+
 export interface HostAgencyFilters {
   search?: string
   status?: HostAgencyStatusFilter
+  sort?: string
+  direction?: "asc" | "desc"
+  page?: number
+  per_page?: number
+}
+
+export interface DeploymentSiteFilters {
+  search?: string
+  status?: DeploymentSiteStatusFilter
+  host_agency_id?: number
   sort?: string
   direction?: "asc" | "desc"
   page?: number
@@ -140,11 +152,18 @@ export interface HostAgency {
 
 export interface DeploymentSite {
   id: number
+  host_agency_id: number
+  host_agency?: HostAgency | null
   name: string
   address: string | null
   city: string | null
   region: string | null
+  contact_person: string | null
+  contact_number: string | null
+  email: string | null
+  description: string | null
   is_active: boolean
+  created_at: string
 }
 
 export interface DeploymentAssignment {
