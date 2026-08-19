@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Building,
@@ -9,6 +9,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Rows3,
   ToggleLeft,
   ToggleRight,
   User,
@@ -223,9 +224,15 @@ export function StaffDeploymentSiteDetailPage() {
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Deployment Slots
               </h3>
-              <p className="text-sm text-muted-foreground">
-                No deployment slots configured yet.
-              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Rows3 className="size-4" aria-hidden="true" />
+                <Link
+                  to={`/staff/deployment-slots?deployment_site_id=${site.id}`}
+                  className="text-sm font-medium text-foreground hover:underline"
+                >
+                  View all slots for this site
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </div>

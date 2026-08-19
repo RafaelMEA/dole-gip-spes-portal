@@ -43,6 +43,11 @@ class ProgramCycle extends Model
         return $this->hasMany(Application::class);
     }
 
+    public function deploymentSlots(): HasMany
+    {
+        return $this->hasMany(DeploymentSlot::class);
+    }
+
     public function requirements(): BelongsToMany
     {
         return $this->belongsToMany(Requirement::class, 'program_cycle_requirements')

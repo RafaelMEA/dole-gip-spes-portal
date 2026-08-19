@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Staff\ApplicationController as StaffApplicationCont
 use App\Http\Controllers\Api\Staff\CatalogController;
 use App\Http\Controllers\Api\Staff\DashboardController as StaffDashboardController;
 use App\Http\Controllers\Api\Staff\DeploymentController;
+use App\Http\Controllers\Api\Staff\DeploymentSlotController;
 use App\Http\Controllers\Api\Staff\DocumentController as StaffDocumentController;
 use App\Http\Controllers\Api\Student\ApplicationController as StudentApplicationController;
 use App\Http\Controllers\Api\Student\DashboardController as StudentDashboardController;
@@ -90,6 +91,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/deployments', [DeploymentController::class, 'index']);
         Route::post('/deployments', [DeploymentController::class, 'store']);
         Route::patch('/deployments/{assignment}', [DeploymentController::class, 'update']);
+
+        Route::get('/deployment-slots', [DeploymentSlotController::class, 'index']);
+        Route::post('/deployment-slots', [DeploymentSlotController::class, 'store']);
+        Route::get('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'show']);
+        Route::put('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'update']);
+        Route::patch('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'update']);
+        Route::patch('/deployment-slots/{deploymentSlot}/status', [DeploymentSlotController::class, 'updateStatus']);
 
         Route::get('/catalog/programs', [CatalogController::class, 'programs']);
         Route::post('/catalog/programs', [CatalogController::class, 'storeProgram']);

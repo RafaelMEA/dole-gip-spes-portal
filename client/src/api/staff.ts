@@ -6,6 +6,8 @@ import type {
   DeploymentAssignment,
   DeploymentSite,
   DeploymentSiteFilters,
+  DeploymentSlot,
+  DeploymentSlotFilters,
   DocumentVerificationAction,
   DocumentVerificationRequest,
   HostAgency,
@@ -445,6 +447,67 @@ export async function updateDeploymentSiteStatus(id: number, isActive: boolean):
   const response = await apiRequest<ApiEnvelope<DeploymentSite>>(
     `/api/staff/catalog/deployment-sites/${id}/status`,
     { method: "PATCH", body: JSON.stringify({ is_active: isActive }) },
+  )
+  return unwrap(response)
+}
+
+export async function fetchDeploymentSlots(filters: DeploymentSlotFilters = {}): Promise<Paginated<DeploymentSlot>> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value))
+    }
+  }
+  const qs = params.toString()
+  const response = await apiRequest<Paginated<DeploymentSlot>>(
+    `/api/staff/deployment-slots${qs ? `?${qs}` : ""}`,
+  )
+  return response
+}
+
+export async function fetchDeploymentSlot(id: number): Promise<DeploymentSlot> {
+  const response = await apiRequest<ApiEnvelope<DeploymentSlot>>(`/api/staff/deployment-slots/${id}`)
+  return unwrap(response)
+}
+
+export interface DeploymentSlotPayload {
+  program_cycle_id: number
+  deployment_site_id: number
+  title: string
+  description?: string
+  capacity: number
+  status?: "active" | "inactive"
+}
+
+export async function createDeploymentSlot(payload: DeploymentSlotPayload): Promise<DeploymentSlot> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentSlot>>("/api/staff/deployment-slots", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+  return unwrap(response)
+}
+
+export async function updateDeploymentSlot(
+  id: number,
+  payload: Partial<DeploymentSlotPayload>,
+): Promise<DeploymentSlot> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentSlot>>(
+    `/api/staff/deployment-slots/${id}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+  )
+  return unwrap(response)
+}
+
+export async function updateDeploymentSlotStatus(
+  id: number,
+  status: "active" | "inactive",
+): Promise<DeploymentSlot> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentSlot>>(
+    `/api/staff/deployment-slots/${id}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
   )
   return unwrap(response)
 }

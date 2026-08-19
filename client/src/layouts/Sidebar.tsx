@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Rows3,
   User,
   X,
 } from "lucide-react"
@@ -50,6 +51,7 @@ export function Sidebar() {
           { to: "/staff/review", label: "Review applications", icon: ClipboardList },
           { to: "/staff/host-agencies", label: "Host agencies", icon: Building },
           { to: "/staff/deployment-sites", label: "Deployment sites", icon: MapPin },
+          { to: "/staff/deployment-slots", label: "Deployment slots", icon: Rows3 },
           { to: "/staff/deployments", label: "Deployments", icon: Building2 },
           { to: "/staff/catalog", label: "Catalog", icon: Library },
         ]

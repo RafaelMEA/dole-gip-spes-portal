@@ -29,4 +29,9 @@ class DeploymentSite extends Model
     {
         return $this->hasMany(DeploymentAssignment::class);
     }
+
+    public function deploymentSlots(): HasMany
+    {
+        return $this->hasMany(DeploymentSlot::class);
+    }
 }

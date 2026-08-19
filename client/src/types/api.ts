@@ -305,3 +305,36 @@ export interface StaffDashboardData {
 export interface ApiEnvelope<T> {
   data: T
 }
+
+export type DeploymentSlotStatus = "active" | "inactive"
+
+export type DeploymentSlotStatusFilter = "all" | "active" | "inactive"
+
+export interface DeploymentSlot {
+  id: number
+  program_cycle_id: number
+  deployment_site_id: number
+  title: string
+  description: string | null
+  capacity: number
+  assigned_count: number
+  available_count: number
+  status: DeploymentSlotStatus
+  status_label: string
+  program_cycle?: ProgramCycle
+  deployment_site?: DeploymentSite
+  created_at: string
+  updated_at: string
+}
+
+export interface DeploymentSlotFilters {
+  search?: string
+  program_cycle_id?: number
+  deployment_site_id?: number
+  host_agency_id?: number
+  status?: DeploymentSlotStatusFilter
+  sort?: string
+  direction?: "asc" | "desc"
+  page?: number
+  per_page?: number
+}
