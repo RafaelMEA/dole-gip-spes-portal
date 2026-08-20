@@ -3,7 +3,9 @@ import type {
   ApiEnvelope,
   Application,
   ApplicationDocument,
+  AssignmentFilters,
   DeploymentAssignment,
+  DeploymentOptions,
   DeploymentSite,
   DeploymentSiteFilters,
   DeploymentSlot,
@@ -97,11 +99,55 @@ export async function verifyDocument(
   return unwrap(response)
 }
 
-export async function fetchDeployments(page = 1): Promise<Paginated<DeploymentAssignment>> {
+export async function fetchDeployments(page = 1, filters: AssignmentFilters = {}): Promise<Paginated<DeploymentAssignment>> {
+  const params = new URLSearchParams()
+  params.set("page", String(page))
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== "" && value !== "all") {
+      params.set(key, String(value))
+    }
+  }
+  const qs = params.toString()
   const response = await apiRequest<Paginated<DeploymentAssignment>>(
-    `/api/staff/deployments?page=${page}`,
+    `/api/staff/deployments?${qs}`,
   )
   return response
+}
+
+export async function fetchDeployment(id: number): Promise<DeploymentAssignment> {
+  const response = await apiRequest<ApiEnvelope<DeploymentAssignment>>(`/api/staff/deployments/${id}`)
+  return unwrap(response)
+}
+
+export async function fetchDeploymentOptions(applicationId: number): Promise<DeploymentOptions> {
+  const response = await apiRequest<ApiEnvelope<DeploymentOptions>>(
+    `/api/staff/applications/${applicationId}/deployment-options`,
+  )
+  return unwrap(response)
+}
+
+export async function assignDeployment(applicationId: number, deploymentSlotId: number): Promise<DeploymentAssignment> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentAssignment>>(
+    `/api/staff/applications/${applicationId}/assign`,
+    {
+      method: "POST",
+      body: JSON.stringify({ deployment_slot_id: deploymentSlotId }),
+    },
+  )
+  return unwrap(response)
+}
+
+export async function cancelDeployment(assignmentId: number, remarks?: string): Promise<DeploymentAssignment> {
+  await requestCsrfCookie()
+  const response = await apiRequest<ApiEnvelope<DeploymentAssignment>>(
+    `/api/staff/deployments/${assignmentId}/cancel`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ remarks }),
+    },
+  )
+  return unwrap(response)
 }
 
 export interface DeploymentPayload {

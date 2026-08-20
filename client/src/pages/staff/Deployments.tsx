@@ -7,19 +7,19 @@ import {
   Inbox,
   Loader2,
   MapPin,
-  Plus,
-  Send,
+  Search,
 } from "lucide-react"
 import {
-  createDeployment,
-  fetchDeploymentSitesAll,
+  cancelDeployment,
   fetchDeployments,
+  fetchCyclesCatalog,
   fetchHostAgencies,
-  fetchReviewQueue,
+  fetchDeploymentSitesAll,
   updateDeploymentStatus,
 } from "@/api/staff"
 import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
+import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,89 +39,66 @@ import { EmptyState } from "@/components/EmptyState"
 import { DeploymentStatusBadge } from "@/components/StatusBadge"
 import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
-import type { DeploymentAssignment } from "@/types/api"
+import type { AssignmentFilters, DeploymentAssignment } from "@/types/api"
 
 export function StaffDeploymentsPage() {
   const { toast } = useToast()
   const [pageNumber, setPageNumber] = useState(1)
+  const [filters, setFilters] = useState<AssignmentFilters>({})
 
-  const fetcher = useCallback(() => fetchDeployments(pageNumber), [pageNumber])
+  const fetcher = useCallback(() => fetchDeployments(pageNumber, filters), [pageNumber, filters])
   const { data: page, loading, error, reload } = useAsync(fetcher)
 
-  const { data: approvedPage } = useAsync(
-    useCallback(() => fetchReviewQueue({ status: "approved", per_page: 100 }), []),
-  )
+  const { data: cycles } = useAsync(useCallback(() => fetchCyclesCatalog(), []))
   const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
   const { data: sites } = useAsync(fetchDeploymentSitesAll)
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    application_id: "",
-    host_agency_id: "",
-    deployment_site_id: "",
-    position: "",
-    start_date: "",
-    end_date: "",
-    remarks: "",
-  })
-
   const [statusTarget, setStatusTarget] = useState<DeploymentAssignment | null>(null)
-  const [statusTo, setStatusTo] = useState<"active" | "completed" | "cancelled" | null>(null)
+  const [statusTo, setStatusTo] = useState<"active" | "completed" | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
+
+  const [cancelTarget, setCancelTarget] = useState<DeploymentAssignment | null>(null)
+  const [cancelRemarks, setCancelRemarks] = useState("")
+  const [cancelLoading, setCancelLoading] = useState(false)
 
   useEffect(() => {
     if (error) {
       toast({
         title: "Unable to load deployments",
-        description: error instanceof ApiError ? error.message : "Please try again.",
+        description: error instanceof ApiError ? errMessage(error) : "Please try again.",
         variant: "error",
       })
     }
   }, [error, toast])
 
-  function openCreate() {
-    setForm({
-      application_id: "",
-      host_agency_id: "",
-      deployment_site_id: "",
-      position: "",
-      start_date: "",
-      end_date: "",
-      remarks: "",
-    })
-    setCreateError(null)
-    setCreateOpen(true)
+  function errMessage(err: unknown): string {
+    return err instanceof ApiError ? err.message : "Please try again."
   }
 
-  async function handleCreate() {
-    if (!form.application_id || !form.host_agency_id || !form.start_date) {
-      setCreateError("Application, host agency, and start date are required.")
-      return
-    }
-    setCreating(true)
-    setCreateError(null)
-    try {
-      await createDeployment({
-        application_id: Number(form.application_id),
-        host_agency_id: Number(form.host_agency_id),
-        deployment_site_id: form.deployment_site_id ? Number(form.deployment_site_id) : null,
-        position: form.position || undefined,
-        start_date: form.start_date,
-        end_date: form.end_date || null,
-        remarks: form.remarks || undefined,
-      })
-      toast({ title: "Deployment scheduled", description: "The deployment assignment has been created.", variant: "success" })
-      setCreateOpen(false)
-      await reload()
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Unable to create deployment."
-      setCreateError(message)
-      toast({ title: "Unable to schedule", description: message, variant: "error" })
-    } finally {
-      setCreating(false)
-    }
+  function updateFilter(key: keyof AssignmentFilters, value: string) {
+    setFilters((prev) => {
+      const next = { ...prev }
+      if (value && value !== "all") {
+        ;(next as Record<string, unknown>)[key] = value
+      } else {
+        delete (next as Record<string, unknown>)[key]
+      }
+      return next
+    })
+    setPageNumber(1)
+  }
+
+  function handleSearchChange(value: string) {
+    setFilters((prev) => {
+      const next = { ...prev }
+      if (value.trim()) {
+        next.search = value.trim()
+      } else {
+        delete next.search
+      }
+      return next
+    })
+    setPageNumber(1)
   }
 
   async function handleStatusChange() {
@@ -135,7 +112,7 @@ export function StaffDeploymentsPage() {
     } catch (err) {
       toast({
         title: "Unable to update",
-        description: err instanceof ApiError ? err.message : "Please try again.",
+        description: errMessage(err),
         variant: "error",
       })
     } finally {
@@ -143,21 +120,103 @@ export function StaffDeploymentsPage() {
     }
   }
 
+  async function handleCancel() {
+    if (!cancelTarget) return
+    setCancelLoading(true)
+    try {
+      await cancelDeployment(cancelTarget.id, cancelRemarks.trim() || undefined)
+      toast({ title: "Assignment cancelled", description: "The deployment assignment has been cancelled.", variant: "success" })
+      setCancelTarget(null)
+      setCancelRemarks("")
+      await reload()
+    } catch (err) {
+      toast({
+        title: "Unable to cancel",
+        description: errMessage(err),
+        variant: "error",
+      })
+    } finally {
+      setCancelLoading(false)
+    }
+  }
+
   if (loading && !page) return <FullPageLoader />
 
-  const approvedApplications = approvedPage?.data ?? []
+  const agencies = agenciesPage?.data ?? []
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Deployments"
-        description="Manage deployment assignments for approved applications."
-      >
-        <Button onClick={openCreate}>
-          <Plus aria-hidden="true" />
-          Schedule deployment
-        </Button>
-      </PageHeader>
+        title="Deployment Assignments"
+        description="View and manage student deployment assignments."
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
+          <Input
+            placeholder="Search student..."
+            className="pl-8"
+            value={filters.search ?? ""}
+            onChange={(event) => handleSearchChange(event.target.value)}
+          />
+        </div>
+
+        <Select value={filters.program_cycle_id ? String(filters.program_cycle_id) : "all"} onValueChange={(v) => updateFilter("program_cycle_id", v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Program Cycle" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cycles</SelectItem>
+            {cycles.map((cycle) => (
+              <SelectItem key={cycle.id} value={String(cycle.id)}>
+                {cycle.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filters.host_agency_id ? String(filters.host_agency_id) : "all"} onValueChange={(v) => updateFilter("host_agency_id", v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Host Agency" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Agencies</SelectItem>
+            {agencies.map((agency) => (
+              <SelectItem key={agency.id} value={String(agency.id)}>
+                {agency.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filters.deployment_site_id ? String(filters.deployment_site_id) : "all"} onValueChange={(v) => updateFilter("deployment_site_id", v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Site" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sites</SelectItem>
+            {(sites ?? []).map((site) => (
+              <SelectItem key={site.id} value={String(site.id)}>
+                {site.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filters.status ?? "all"} onValueChange={(v) => updateFilter("status", v)}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="scheduled">Scheduled</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {page ? (
         <>
@@ -168,8 +227,8 @@ export function StaffDeploymentsPage() {
           {page.data.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="No deployments yet"
-              description="Schedule a deployment for an approved application to get started."
+              title="No assignments found"
+              description="Try adjusting your filters or assign a student to a deployment slot."
             />
           ) : (
             <div className="space-y-3">
@@ -182,6 +241,11 @@ export function StaffDeploymentsPage() {
                         <DeploymentStatusBadge status={assignment.status} label={assignment.status_label} />
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        {assignment.deployment_slot ? (
+                          <span>{assignment.deployment_slot.title}</span>
+                        ) : assignment.position ? (
+                          <span>{assignment.position}</span>
+                        ) : null}
                         {assignment.host_agency ? (
                           <span className="inline-flex items-center gap-1">
                             <Building2 className="size-3.5" aria-hidden="true" />
@@ -194,14 +258,10 @@ export function StaffDeploymentsPage() {
                             {assignment.deployment_site.name}
                           </span>
                         ) : null}
-                        {assignment.position ? (
-                          <span>{assignment.position}</span>
-                        ) : null}
-                        {assignment.start_date ? (
+                        {assignment.assigned_at ? (
                           <span className="inline-flex items-center gap-1">
                             <CalendarRange className="size-3.5" aria-hidden="true" />
-                            {assignment.start_date}
-                            {assignment.end_date ? ` – ${assignment.end_date}` : ""}
+                            {formatDateTime(assignment.assigned_at)}
                           </span>
                         ) : null}
                       </div>
@@ -213,15 +273,20 @@ export function StaffDeploymentsPage() {
                           <Button size="sm" onClick={() => { setStatusTarget(assignment); setStatusTo("active") }}>
                             Mark active
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => { setStatusTarget(assignment); setStatusTo("cancelled") }} className="text-destructive hover:text-destructive">
+                          <Button variant="outline" size="sm" onClick={() => setCancelTarget(assignment)} className="text-destructive hover:text-destructive">
                             Cancel
                           </Button>
                         </>
                       ) : null}
                       {assignment.status === "active" ? (
-                        <Button size="sm" onClick={() => { setStatusTarget(assignment); setStatusTo("completed") }}>
-                          Mark completed
-                        </Button>
+                        <>
+                          <Button size="sm" onClick={() => { setStatusTarget(assignment); setStatusTo("completed") }}>
+                            Mark completed
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setCancelTarget(assignment)} className="text-destructive hover:text-destructive">
+                            Cancel
+                          </Button>
+                        </>
                       ) : null}
                       <Button
                         nativeButton={false}
@@ -255,135 +320,64 @@ export function StaffDeploymentsPage() {
         </>
       ) : null}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Schedule deployment</DialogTitle>
-            <DialogDescription>Assign an approved applicant to a host agency.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {createError ? (
-              <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {createError}
-              </p>
-            ) : null}
-
-            <div className="space-y-2">
-              <Label htmlFor="deploy-app">Approved applicant</Label>
-              <Select value={form.application_id} onValueChange={(value) => setForm({ ...form, application_id: value ?? "" })}>
-                <SelectTrigger id="deploy-app" className="w-full">
-                  <SelectValue placeholder="Select an approved application" />
-                </SelectTrigger>
-                <SelectContent>
-                  {approvedApplications.map((application) => (
-                    <SelectItem key={application.id} value={String(application.id)}>
-                      {application.applicant?.name ?? `Application #${application.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="deploy-agency">Host agency</Label>
-              <Select value={form.host_agency_id} onValueChange={(value) => setForm({ ...form, host_agency_id: value ?? "" })}>
-                <SelectTrigger id="deploy-agency" className="w-full">
-                  <SelectValue placeholder="Select host agency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(agenciesPage?.data ?? []).map((agency) => (
-                    <SelectItem key={agency.id} value={String(agency.id)}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="deploy-site">Deployment site (optional)</Label>
-              <Select value={form.deployment_site_id} onValueChange={(value) => setForm({ ...form, deployment_site_id: value ?? "" })}>
-                <SelectTrigger id="deploy-site" className="w-full">
-                  <SelectValue placeholder="Select site" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(sites ?? []).map((site) => (
-                    <SelectItem key={site.id} value={String(site.id)}>
-                      {site.name}
-                      {site.city ? ` · ${site.city}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="deploy-position">Position (optional)</Label>
-              <Input id="deploy-position" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} placeholder="e.g. Administrative Intern" />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="deploy-start">Start date</Label>
-                <Input id="deploy-start" type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deploy-end">End date (optional)</Label>
-                <Input id="deploy-end" type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="deploy-remarks">Remarks (optional)</Label>
-              <Textarea id="deploy-remarks" value={form.remarks} onChange={(event) => setForm({ ...form, remarks: event.target.value })} placeholder="Any notes..." />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={creating}>
-              {creating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
-              Schedule
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={statusTarget !== null} onOpenChange={(open) => !open && setStatusTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {statusTo === "active"
                 ? "Mark deployment active"
-                : statusTo === "completed"
-                  ? "Mark deployment completed"
-                  : "Cancel deployment"}
+                : "Mark deployment completed"}
             </DialogTitle>
             <DialogDescription>
               {statusTarget?.applicant?.name ?? `Assignment #${statusTarget?.id}`} ·{" "}
-              {statusTarget?.host_agency?.name ?? "Host agency"}
+              {statusTarget?.deployment_slot?.title ?? statusTarget?.host_agency?.name ?? "Deployment"}
             </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {statusTo === "active"
               ? "This will mark the applicant as deployed and move the application to 'deployed'."
-              : statusTo === "completed"
-                ? "This will complete the application and end the assignment."
-                : "This will cancel the assignment and return the application to 'approved'."}
+              : "This will complete the application and end the assignment."}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusTarget(null)} disabled={statusLoading}>
               Close
             </Button>
-            <Button
-              variant={statusTo === "cancelled" ? "outline" : "default"}
-              className={statusTo === "cancelled" ? "text-destructive hover:text-destructive" : undefined}
-              onClick={handleStatusChange}
-              disabled={statusLoading}
-            >
+            <Button onClick={handleStatusChange} disabled={statusLoading}>
               {statusLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
               Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cancelTarget !== null} onOpenChange={(open) => { if (!open) { setCancelTarget(null); setCancelRemarks("") } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel deployment assignment</DialogTitle>
+            <DialogDescription>
+              {cancelTarget?.applicant?.name ?? `Assignment #${cancelTarget?.id}`} ·{" "}
+              {cancelTarget?.deployment_slot?.title ?? cancelTarget?.host_agency?.name ?? "Deployment"}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will cancel the assignment and return the application to approved status. The student may then be assigned to a different slot.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="cancel-remarks">Remarks (optional)</Label>
+            <Textarea
+              id="cancel-remarks"
+              value={cancelRemarks}
+              onChange={(event) => setCancelRemarks(event.target.value)}
+              placeholder="Reason for cancellation..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelRemarks("") }} disabled={cancelLoading}>
+              Close
+            </Button>
+            <Button variant="outline" onClick={handleCancel} disabled={cancelLoading} className="text-destructive hover:text-destructive">
+              {cancelLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+              Cancel Assignment
             </Button>
           </DialogFooter>
         </DialogContent>

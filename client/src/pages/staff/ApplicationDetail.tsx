@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Building2,
   CalendarRange,
   CheckCircle2,
@@ -16,9 +17,9 @@ import {
   XCircle,
 } from "lucide-react"
 import {
-  createDeployment,
-  fetchDeploymentSitesAll,
-  fetchHostAgencies,
+  assignDeployment,
+  cancelDeployment,
+  fetchDeploymentOptions,
   fetchStaffApplication,
   reviewApplication,
   updateDeploymentStatus,
@@ -47,6 +48,12 @@ import { ApplicationStatusBadge, DeploymentStatusBadge } from "@/components/Stat
 import { DocumentReview } from "@/components/staff/DocumentReview"
 import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
+import type {
+  DeploymentAgencyOption,
+  DeploymentOptions,
+  DeploymentSiteOption,
+  DeploymentSlotOption,
+} from "@/types/api"
 
 interface ActionModal {
   type: ReviewAction | "schedule_deployment"
@@ -165,24 +172,22 @@ export function StaffApplicationDetailPage() {
   const fetcher = useCallback(() => fetchStaffApplication(applicationId), [applicationId])
   const { data: application, loading, error, reload } = useAsync(fetcher)
 
-  const { data: agenciesPage } = useAsync(useCallback(() => fetchHostAgencies({ per_page: 100 }), []))
-  const { data: sites } = useAsync(fetchDeploymentSitesAll)
-
   const [activeAction, setActiveAction] = useState<ActionModal | null>(null)
   const [remarks, setRemarks] = useState("")
   const [actionLoading, setActionLoading] = useState(false)
 
-  const [scheduleOpen, setScheduleOpen] = useState(false)
-  const [scheduleForm, setScheduleForm] = useState({
-    host_agency_id: "",
-    deployment_site_id: "",
-    position: "",
-    start_date: "",
-    end_date: "",
-    remarks: "",
-  })
-  const [scheduleError, setScheduleError] = useState<string | null>(null)
-  const [scheduleLoading, setScheduleLoading] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignStep, setAssignStep] = useState<"select" | "confirm">("select")
+  const [deployOptions, setDeployOptions] = useState<DeploymentOptions | null>(null)
+  const [optionsLoading, setOptionsLoading] = useState(false)
+  const [optionsError, setOptionsError] = useState<string | null>(null)
+
+  const [selectedAgency, setSelectedAgency] = useState<DeploymentAgencyOption | null>(null)
+  const [selectedSite, setSelectedSite] = useState<DeploymentSiteOption | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<DeploymentSlotOption | null>(null)
+
+  const [assignLoading, setAssignLoading] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   if (loading && !application) return <FullPageLoader />
 
@@ -280,34 +285,84 @@ export function StaffApplicationDetailPage() {
     }
   }
 
-  async function handleSchedule() {
-    if (!scheduleForm.host_agency_id || !scheduleForm.start_date) {
-      setScheduleError("Host agency and start date are required.")
-      return
-    }
-    setScheduleLoading(true)
-    setScheduleError(null)
-    try {
-      await createDeployment({
-        application_id: applicationId,
-        host_agency_id: Number(scheduleForm.host_agency_id),
-        deployment_site_id: scheduleForm.deployment_site_id ? Number(scheduleForm.deployment_site_id) : null,
-        position: scheduleForm.position || undefined,
-        start_date: scheduleForm.start_date,
-        end_date: scheduleForm.end_date || null,
-        remarks: scheduleForm.remarks || undefined,
+  function openAssignDialog() {
+    setAssignOpen(true)
+    setAssignStep("select")
+    setDeployOptions(null)
+    setOptionsError(null)
+    setSelectedAgency(null)
+    setSelectedSite(null)
+    setSelectedSlot(null)
+    setAssignError(null)
+    setOptionsLoading(true)
+
+    fetchDeploymentOptions(applicationId)
+      .then((options) => {
+        setDeployOptions(options)
+        setOptionsLoading(false)
       })
-      toast({ title: "Deployment scheduled", description: "The applicant is now marked for deployment.", variant: "success" })
-      setScheduleOpen(false)
+      .catch((err) => {
+        const message = err instanceof ApiError ? err.message : "Unable to load deployment options."
+        setOptionsError(message)
+        setOptionsLoading(false)
+      })
+  }
+
+  function handleAgencyChange(agencyId: string) {
+    const agency = deployOptions?.host_agencies.find((a) => a.id === Number(agencyId)) ?? null
+    setSelectedAgency(agency)
+    setSelectedSite(null)
+    setSelectedSlot(null)
+  }
+
+  function handleSiteChange(siteId: string) {
+    const site = selectedAgency?.deployment_sites.find((s) => s.id === Number(siteId)) ?? null
+    setSelectedSite(site)
+    setSelectedSlot(null)
+  }
+
+  function handleSlotChange(slotId: string) {
+    const slot = selectedSite?.slots.find((s) => s.id === Number(slotId)) ?? null
+    setSelectedSlot(slot)
+  }
+
+  function handleContinueToConfirm() {
+    if (!selectedSlot) return
+    setAssignStep("confirm")
+  }
+
+  async function handleConfirmAssign() {
+    if (!selectedSlot) return
+    setAssignLoading(true)
+    setAssignError(null)
+    try {
+      await assignDeployment(applicationId, selectedSlot.id)
+      toast({
+        title: "Student assigned",
+        description: "The student has been assigned to the deployment slot.",
+        variant: "success",
+      })
+      setAssignOpen(false)
       await reload()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Unable to schedule deployment."
-      setScheduleError(message)
-      toast({ title: "Unable to schedule", description: message, variant: "error" })
+      const message = err instanceof ApiError ? err.message : "Unable to assign student."
+      setAssignError(message)
+      toast({ title: "Unable to assign", description: message, variant: "error" })
     } finally {
-      setScheduleLoading(false)
+      setAssignLoading(false)
     }
   }
+
+  function handleCancelAssign() {
+    if (assignStep === "confirm") {
+      setAssignStep("select")
+      setAssignError(null)
+    } else {
+      setAssignOpen(false)
+    }
+  }
+
+  const hasActiveAssignment = assignment && ["scheduled", "active"].includes(assignment.status)
 
   return (
     <div className="space-y-6">
@@ -372,7 +427,7 @@ export function StaffApplicationDetailPage() {
                     Verified
                   </dt>
                   <dd className="mt-0.5 font-semibold text-emerald-600">
-                    ✓ {documents.filter((d) => d.verification_status === "verified").length}
+                    {documents.filter((d) => d.verification_status === "verified").length}
                   </dd>
                 </div>
                 <div>
@@ -380,7 +435,7 @@ export function StaffApplicationDetailPage() {
                     Rejected
                   </dt>
                   <dd className="mt-0.5 font-semibold text-red-600">
-                    ✗ {documents.filter((d) => d.verification_status === "rejected").length}
+                    {documents.filter((d) => d.verification_status === "rejected").length}
                   </dd>
                 </div>
                 <div>
@@ -388,17 +443,17 @@ export function StaffApplicationDetailPage() {
                     Pending
                   </dt>
                   <dd className="mt-0.5 font-semibold text-amber-600">
-                    ○ {documents.filter((d) => d.verification_status === "pending").length}
+                    {documents.filter((d) => d.verification_status === "pending").length}
                   </dd>
                 </div>
               </dl>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {application.status === "approved" ? (
-                <Button onClick={() => setScheduleOpen(true)}>
+              {application.status === "approved" && !hasActiveAssignment ? (
+                <Button onClick={openAssignDialog}>
                   <Building2 aria-hidden="true" />
-                  Schedule deployment
+                  Assign deployment
                 </Button>
               ) : null}
               {actions.map((action) => (
@@ -417,12 +472,12 @@ export function StaffApplicationDetailPage() {
             </div>
           </CardContent>
         </Card>
-      ) : application.status === "approved" ? (
+      ) : application.status === "approved" && !hasActiveAssignment ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-4">
           <p className="mr-2 text-sm font-medium">Actions:</p>
-          <Button onClick={() => setScheduleOpen(true)}>
+          <Button onClick={openAssignDialog}>
             <Building2 aria-hidden="true" />
-            Schedule deployment
+            Assign deployment
           </Button>
         </div>
       ) : null}
@@ -555,6 +610,17 @@ export function StaffApplicationDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
+                {assignment.deployment_slot ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Position</p>
+                    <p className="mt-0.5">{assignment.deployment_slot.title}</p>
+                  </div>
+                ) : assignment.position ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Position</p>
+                    <p className="mt-0.5">{assignment.position}</p>
+                  </div>
+                ) : null}
                 {assignment.host_agency ? (
                   <div className="flex items-start gap-2 text-muted-foreground">
                     <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -576,6 +642,18 @@ export function StaffApplicationDetailPage() {
                     {assignment.start_date}
                     {assignment.end_date ? ` – ${assignment.end_date}` : ""}
                   </p>
+                ) : null}
+                {assignment.assigned_at ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assigned</p>
+                    <p className="mt-0.5">{formatDateTime(assignment.assigned_at)}</p>
+                  </div>
+                ) : null}
+                {assignment.assigned_by_name ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assigned by</p>
+                    <p className="mt-0.5">{assignment.assigned_by_name}</p>
+                  </div>
                 ) : null}
                 {assignment.remarks ? <p className="text-muted-foreground">{assignment.remarks}</p> : null}
               </CardContent>
@@ -625,114 +703,174 @@ export function StaffApplicationDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+      <Dialog open={assignOpen} onOpenChange={(open) => !assignLoading && setAssignOpen(open)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Schedule deployment</DialogTitle>
-            <DialogDescription>
-              Assign this applicant to a host agency and site.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {scheduleError ? (
-              <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {scheduleError}
-              </p>
-            ) : null}
+          {assignStep === "select" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Assign Deployment</DialogTitle>
+                <DialogDescription>
+                  Select a deployment slot for this student.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {optionsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
+                  </div>
+                ) : optionsError ? (
+                  <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {optionsError}
+                  </p>
+                ) : deployOptions && deployOptions.host_agencies.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    No active deployment slots available for this program cycle.
+                  </p>
+                ) : (
+                  <>
+                    <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Student</dt>
+                        <dd>{application.applicant?.name ?? "—"}</dd>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Program</dt>
+                        <dd>{deployOptions?.program_cycle?.name ?? "—"}</dd>
+                      </dl>
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="host-agency">Host agency</Label>
-              <Select
-                value={scheduleForm.host_agency_id}
-                onValueChange={(value) => setScheduleForm({ ...scheduleForm, host_agency_id: value ?? "" })}
-              >
-                <SelectTrigger id="host-agency" className="w-full">
-                  <SelectValue placeholder="Select host agency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(agenciesPage?.data ?? []).map((agency) => (
-                    <SelectItem key={agency.id} value={String(agency.id)}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="assign-agency">Host Agency</Label>
+                      <Select value={selectedAgency?.id ? String(selectedAgency.id) : ""} onValueChange={handleAgencyChange}>
+                        <SelectTrigger id="assign-agency" className="w-full">
+                          <SelectValue placeholder="Select Host Agency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(deployOptions?.host_agencies ?? []).map((agency) => (
+                            <SelectItem key={agency.id} value={String(agency.id)}>
+                              {agency.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="deployment-site">Deployment site (optional)</Label>
-              <Select
-                value={scheduleForm.deployment_site_id}
-                onValueChange={(value) => setScheduleForm({ ...scheduleForm, deployment_site_id: value ?? "" })}
-              >
-                <SelectTrigger id="deployment-site" className="w-full">
-                  <SelectValue placeholder="Select site" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(sites ?? []).map((site) => (
-                    <SelectItem key={site.id} value={String(site.id)}>
-                      {site.name}
-                      {site.city ? ` · ${site.city}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                    {selectedAgency ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="assign-site">Deployment Site</Label>
+                        <Select value={selectedSite?.id ? String(selectedSite.id) : ""} onValueChange={handleSiteChange}>
+                          <SelectTrigger id="assign-site" className="w-full">
+                            <SelectValue placeholder="Select Site" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedAgency.deployment_sites.map((site) => (
+                              <SelectItem key={site.id} value={String(site.id)}>
+                                {site.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="position">Position (optional)</Label>
-              <Input
-                id="position"
-                value={scheduleForm.position}
-                onChange={(event) => setScheduleForm({ ...scheduleForm, position: event.target.value })}
-                placeholder="e.g. Administrative Intern"
-              />
-            </div>
+                    {selectedSite ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="assign-slot">Deployment Slot</Label>
+                        <Select value={selectedSlot?.id ? String(selectedSlot.id) : ""} onValueChange={handleSlotChange}>
+                          <SelectTrigger id="assign-slot" className="w-full">
+                            <SelectValue placeholder="Select Slot" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedSite.slots.map((slot) => (
+                              <SelectItem
+                                key={slot.id}
+                                value={String(slot.id)}
+                                disabled={slot.available_count <= 0}
+                              >
+                                {slot.title} ({slot.available_count} of {slot.capacity} available)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="start-date">Start date</Label>
-                <Input
-                  id="start-date"
-                  type="date"
-                  value={scheduleForm.start_date}
-                  onChange={(event) => setScheduleForm({ ...scheduleForm, start_date: event.target.value })}
-                />
+                    {selectedSlot ? (
+                      <div className="rounded-lg border bg-muted/30 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Capacity</p>
+                        <div className="mt-1 flex gap-4 text-sm">
+                          <span>{selectedSlot.capacity} total</span>
+                          <span>{selectedSlot.assigned_count} assigned</span>
+                          <span className={selectedSlot.available_count > 0 ? "font-medium text-emerald-600" : "font-medium text-red-600"}>
+                            {selectedSlot.available_count} available
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-date">End date (optional)</Label>
-                <Input
-                  id="end-date"
-                  type="date"
-                  value={scheduleForm.end_date}
-                  onChange={(event) => setScheduleForm({ ...scheduleForm, end_date: event.target.value })}
-                />
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCancelAssign} disabled={assignLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleContinueToConfirm} disabled={!selectedSlot || assignLoading}>
+                  Continue
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Confirm Deployment Assignment</DialogTitle>
+                <DialogDescription>
+                  Review the assignment details before confirming.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <dl className="space-y-2">
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Student</dt>
+                      <dd className="font-medium">{application.applicant?.name ?? "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Host Agency</dt>
+                      <dd className="font-medium">{selectedAgency?.name ?? "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Deployment Site</dt>
+                      <dd className="font-medium">{selectedSite?.name ?? "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Position</dt>
+                      <dd className="font-medium">{selectedSlot?.title ?? "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Available Slots</dt>
+                      <dd className="font-medium">{selectedSlot?.available_count ?? 0}</dd>
+                    </div>
+                  </dl>
+                </div>
+                {assignError ? (
+                  <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {assignError}
+                  </p>
+                ) : null}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="schedule-remarks">Remarks (optional)</Label>
-              <Textarea
-                id="schedule-remarks"
-                value={scheduleForm.remarks}
-                onChange={(event) => setScheduleForm({ ...scheduleForm, remarks: event.target.value })}
-                placeholder="Any notes about this deployment..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={scheduleLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleSchedule} disabled={scheduleLoading}>
-              {scheduleLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-              <Send aria-hidden="true" />
-              Schedule
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCancelAssign} disabled={assignLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleConfirmAssign} disabled={assignLoading}>
+                  {assignLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+                  <Send aria-hidden="true" />
+                  Confirm Assignment
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }

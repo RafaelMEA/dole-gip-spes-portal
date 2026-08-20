@@ -89,8 +89,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/applications/{application}/documents/{document}/verification', [StaffDocumentController::class, 'update']);
 
         Route::get('/deployments', [DeploymentController::class, 'index']);
+        Route::get('/deployments/{assignment}', [DeploymentController::class, 'show']);
         Route::post('/deployments', [DeploymentController::class, 'store']);
         Route::patch('/deployments/{assignment}', [DeploymentController::class, 'update']);
+        Route::patch('/deployments/{assignment}/cancel', [DeploymentController::class, 'cancel']);
+
+        Route::get('/applications/{application}/deployment-options', [DeploymentController::class, 'deploymentOptions']);
+        Route::post('/applications/{application}/assign', [DeploymentController::class, 'assign']);
 
         Route::get('/deployment-slots', [DeploymentSlotController::class, 'index']);
         Route::post('/deployment-slots', [DeploymentSlotController::class, 'store']);

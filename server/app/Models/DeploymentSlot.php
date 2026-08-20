@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'program_cycle_id', 'deployment_site_id', 'title', 'description',
@@ -51,7 +52,14 @@ class DeploymentSlot extends Model
 
     public function getAssignedCountAttribute(): int
     {
-        return 0;
+        return $this->deploymentAssignments()
+            ->whereIn('status', ['scheduled', 'active'])
+            ->count();
+    }
+
+    public function deploymentAssignments(): HasMany
+    {
+        return $this->hasMany(DeploymentAssignment::class);
     }
 
     public function getAvailableCountAttribute(): int

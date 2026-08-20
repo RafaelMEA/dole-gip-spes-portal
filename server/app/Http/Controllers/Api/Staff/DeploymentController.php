@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AssignDeploymentRequest;
 use App\Http\Requests\StoreDeploymentAssignmentRequest;
 use App\Http\Resources\DeploymentAssignmentResource;
 use App\Models\Application;
 use App\Models\DeploymentAssignment;
+use App\Models\DeploymentSlot;
 use App\Services\ApplicationService;
+use App\Services\DeploymentAssignmentService;
 use DomainException;
 use Illuminate\Http\Request;
 
@@ -15,26 +18,119 @@ class DeploymentController extends Controller
 {
     public function __construct(
         private readonly ApplicationService $applications,
+        private readonly DeploymentAssignmentService $deploymentAssignments,
     ) {
     }
 
-    /**
-     * List deployment assignments.
-     */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', DeploymentAssignment::class);
+
         $query = DeploymentAssignment::with([
             'hostAgency',
             'deploymentSite',
+            'deploymentSlot',
             'application.applicant',
+            'assignedBy',
         ])->orderByDesc('created_at');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->whereHas('application.applicant', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('program_cycle_id')) {
+            $query->whereHas('application', function ($q) use ($request) {
+                $q->where('program_cycle_id', $request->input('program_cycle_id'));
+            });
+        }
+
+        if ($request->filled('host_agency_id')) {
+            $query->where('host_agency_id', $request->input('host_agency_id'));
+        }
+
+        if ($request->filled('deployment_site_id')) {
+            $query->where('deployment_site_id', $request->input('deployment_site_id'));
+        }
 
         return DeploymentAssignmentResource::collection($query->paginate($request->integer('per_page', 15)));
     }
 
-    /**
-     * Schedule a deployment for an approved application.
-     */
+    public function show(DeploymentAssignment $assignment)
+    {
+        $this->authorize('view', $assignment);
+
+        $assignment->load([
+            'hostAgency',
+            'deploymentSite',
+            'deploymentSlot.programCycle',
+            'application.applicant',
+            'assignedBy',
+        ]);
+
+        return new DeploymentAssignmentResource($assignment);
+    }
+
+    public function deploymentOptions(Application $application)
+    {
+        $this->authorize('create', DeploymentAssignment::class);
+
+        try {
+            $options = $this->deploymentAssignments->getDeploymentOptions($application);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['data' => $options]);
+    }
+
+    public function assign(Application $application, AssignDeploymentRequest $request)
+    {
+        $this->authorize('create', DeploymentAssignment::class);
+
+        $slot = DeploymentSlot::findOrFail($request->validated('deployment_slot_id'));
+
+        try {
+            $assignment = $this->deploymentAssignments->assign(
+                $application,
+                $slot,
+                $request->user(),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        return (new DeploymentAssignmentResource($assignment))->response()->setStatusCode(201);
+    }
+
+    public function cancel(DeploymentAssignment $assignment, Request $request)
+    {
+        $this->authorize('cancel', $assignment);
+
+        $request->validate([
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $assignment = $this->deploymentAssignments->cancel(
+                $assignment,
+                $request->user(),
+                $request->input('remarks'),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new DeploymentAssignmentResource($assignment);
+    }
+
     public function store(StoreDeploymentAssignmentRequest $request)
     {
         $this->authorize('create', DeploymentAssignment::class);
@@ -62,20 +158,19 @@ class DeploymentController extends Controller
 
         try {
             $this->applications->scheduleForDeployment($application, $request->user());
-        } catch (DomainException $e) {
+        } catch (DomainException) {
             // Application already flagged for deployment; assignment still stands.
         }
 
         return (new DeploymentAssignmentResource($assignment->load([
             'hostAgency',
             'deploymentSite',
+            'deploymentSlot',
             'application.applicant',
+            'assignedBy',
         ])))->response()->setStatusCode(201);
     }
 
-    /**
-     * Update an assignment's status, which drives the application state.
-     */
     public function update(DeploymentAssignment $assignment, Request $request)
     {
         $this->authorize('update', $assignment);
@@ -107,7 +202,9 @@ class DeploymentController extends Controller
         return new DeploymentAssignmentResource($assignment->load([
             'hostAgency',
             'deploymentSite',
+            'deploymentSlot',
             'application.applicant',
+            'assignedBy',
         ]));
     }
 }

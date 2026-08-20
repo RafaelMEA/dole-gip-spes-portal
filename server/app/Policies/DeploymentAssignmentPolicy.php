@@ -7,6 +7,11 @@ use App\Models\User;
 
 class DeploymentAssignmentPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return $user->isStaff();
+    }
+
     public function view(User $user, DeploymentAssignment $assignment): bool
     {
         return $user->isStaff()
@@ -14,6 +19,11 @@ class DeploymentAssignmentPolicy
     }
 
     public function create(User $user): bool
+    {
+        return $user->isStaff();
+    }
+
+    public function cancel(User $user, DeploymentAssignment $assignment): bool
     {
         return $user->isStaff();
     }

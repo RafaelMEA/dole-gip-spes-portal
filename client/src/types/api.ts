@@ -169,6 +169,7 @@ export interface DeploymentSite {
 export interface DeploymentAssignment {
   id: number
   application_id: number
+  deployment_slot_id: number | null
   position: string | null
   start_date: string | null
   end_date: string | null
@@ -178,7 +179,11 @@ export interface DeploymentAssignment {
   assigned_at: string | null
   host_agency: HostAgency | null
   deployment_site: DeploymentSite | null
+  deployment_slot: DeploymentSlot | null
+  program_cycle?: ProgramCycle | null
   applicant?: UserSummary | null
+  assigned_by?: UserSummary | null
+  assigned_by_name?: string | null
 }
 
 export interface DocumentRequirement {
@@ -335,6 +340,43 @@ export interface DeploymentSlotFilters {
   status?: DeploymentSlotStatusFilter
   sort?: string
   direction?: "asc" | "desc"
+  page?: number
+  per_page?: number
+}
+
+export interface DeploymentSlotOption {
+  id: number
+  title: string
+  capacity: number
+  assigned_count: number
+  available_count: number
+}
+
+export interface DeploymentSiteOption {
+  id: number
+  name: string
+  slots: DeploymentSlotOption[]
+}
+
+export interface DeploymentAgencyOption {
+  id: number
+  name: string
+  deployment_sites: DeploymentSiteOption[]
+}
+
+export interface DeploymentOptions {
+  program_cycle: { id: number; name: string; program_id: number }
+  host_agencies: DeploymentAgencyOption[]
+}
+
+export type AssignmentStatusFilter = "all" | DeploymentStatus
+
+export interface AssignmentFilters {
+  search?: string
+  status?: AssignmentStatusFilter
+  program_cycle_id?: number
+  host_agency_id?: number
+  deployment_site_id?: number
   page?: number
   per_page?: number
 }

@@ -590,7 +590,12 @@ export function StudentApplicationDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                {application.assignment.position ? (
+                {application.assignment.deployment_slot?.title ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Position</p>
+                    <p className="mt-0.5">{application.assignment.deployment_slot.title}</p>
+                  </div>
+                ) : application.assignment.position ? (
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Position</p>
                     <p className="mt-0.5">{application.assignment.position}</p>
@@ -618,7 +623,12 @@ export function StudentApplicationDetailPage() {
                     </div>
                   </div>
                 ) : null}
-                {application.assignment.start_date ? (
+                {application.assignment.assigned_at ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assignment Date</p>
+                    <p className="mt-0.5">{formatDateTime(application.assignment.assigned_at)}</p>
+                  </div>
+                ) : application.assignment.start_date ? (
                   <p className="flex items-center gap-1.5 text-muted-foreground">
                     <CalendarRange className="size-4" aria-hidden="true" />
                     {formatDate(application.assignment.start_date)}
