@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Building2,
   CalendarRange,
+  History,
   Inbox,
   Loader2,
   MapPin,
@@ -12,6 +13,7 @@ import {
 import {
   cancelDeployment,
   fetchDeployments,
+  fetchAssignmentHistory,
   fetchCyclesCatalog,
   fetchHostAgencies,
   fetchDeploymentSitesAll,
@@ -36,6 +38,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { PageHeader } from "@/components/PageHeader"
 import { EmptyState } from "@/components/EmptyState"
+import { HistoryFeed } from "@/components/HistoryTimeline"
 import { DeploymentStatusBadge } from "@/components/StatusBadge"
 import { FullPageLoader } from "@/components/FullPageLoader"
 import { useToast } from "@/toast/useToast"
@@ -61,6 +64,8 @@ export function StaffDeploymentsPage() {
   const [cancelRemarks, setCancelRemarks] = useState("")
   const [cancelLoading, setCancelLoading] = useState(false)
 
+  const [historyTarget, setHistoryTarget] = useState<DeploymentAssignment | null>(null)
+
   useEffect(() => {
     if (error) {
       toast({
@@ -75,7 +80,7 @@ export function StaffDeploymentsPage() {
     return err instanceof ApiError ? err.message : "Please try again."
   }
 
-  function updateFilter(key: keyof AssignmentFilters, value: string) {
+  function updateFilter(key: keyof AssignmentFilters, value: string | null) {
     setFilters((prev) => {
       const next = { ...prev }
       if (value && value !== "all") {
@@ -168,7 +173,7 @@ export function StaffDeploymentsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Cycles</SelectItem>
-            {cycles.map((cycle) => (
+            {(cycles ?? []).map((cycle) => (
               <SelectItem key={cycle.id} value={String(cycle.id)}>
                 {cycle.name}
               </SelectItem>
@@ -288,6 +293,10 @@ export function StaffDeploymentsPage() {
                           </Button>
                         </>
                       ) : null}
+                      <Button variant="outline" size="sm" onClick={() => setHistoryTarget(assignment)}>
+                        <History aria-hidden="true" />
+                        History
+                      </Button>
                       <Button
                         nativeButton={false}
                         variant="ghost"
@@ -347,6 +356,25 @@ export function StaffDeploymentsPage() {
               Confirm
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyTarget !== null} onOpenChange={(open) => !open && setHistoryTarget(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assignment history</DialogTitle>
+            <DialogDescription>
+              {historyTarget?.applicant?.name ?? `Assignment #${historyTarget?.id}`} ·{" "}
+              {historyTarget?.deployment_slot?.title ?? historyTarget?.host_agency?.name ?? "Deployment"}
+            </DialogDescription>
+          </DialogHeader>
+          {historyTarget ? (
+            <HistoryFeed
+              fetchPage={(page) => fetchAssignmentHistory(historyTarget.id, page)}
+              showChanges
+              refreshKey={historyTarget.updated_at}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
 

@@ -4,6 +4,7 @@ import type {
   Application,
   ApplicationDocument,
   AssignmentFilters,
+  AuditEvent,
   DeploymentAssignment,
   DeploymentOptions,
   DeploymentSite,
@@ -556,4 +557,37 @@ export async function updateDeploymentSlotStatus(
     { method: "PATCH", body: JSON.stringify({ status }) },
   )
   return unwrap(response)
+}
+
+export async function fetchStaffApplicationHistory(
+  id: number,
+  page = 1,
+  perPage = 25,
+): Promise<Paginated<AuditEvent>> {
+  const response = await apiRequest<Paginated<AuditEvent>>(
+    `/api/staff/applications/${id}/history?page=${page}&per_page=${perPage}`,
+  )
+  return response
+}
+
+export async function fetchDeploymentSlotHistory(
+  id: number,
+  page = 1,
+  perPage = 25,
+): Promise<Paginated<AuditEvent>> {
+  const response = await apiRequest<Paginated<AuditEvent>>(
+    `/api/staff/deployment-slots/${id}/history?page=${page}&per_page=${perPage}`,
+  )
+  return response
+}
+
+export async function fetchAssignmentHistory(
+  id: number,
+  page = 1,
+  perPage = 25,
+): Promise<Paginated<AuditEvent>> {
+  const response = await apiRequest<Paginated<AuditEvent>>(
+    `/api/staff/deployments/${id}/history?page=${page}&per_page=${perPage}`,
+  )
+  return response
 }

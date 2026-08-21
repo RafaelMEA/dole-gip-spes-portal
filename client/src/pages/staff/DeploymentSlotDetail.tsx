@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import {
   fetchDeploymentSlot,
+  fetchDeploymentSlotHistory,
   fetchHostAgencies,
   fetchDeploymentSitesAll,
   updateDeploymentSlot,
@@ -31,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { PageHeader } from "@/components/PageHeader"
 import { FullPageLoader } from "@/components/FullPageLoader"
+import { HistoryFeed } from "@/components/HistoryTimeline"
 import { useToast } from "@/toast/useToast"
 import { formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -239,6 +241,19 @@ export function StaffDeploymentSlotDetailPage() {
                   </div>
                 </div>
               </dl>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                History
+              </h3>
+              <HistoryFeed
+                fetchPage={(page) => fetchDeploymentSlotHistory(slot.id, page)}
+                showChanges
+                refreshKey={slot.updated_at}
+              />
             </CardContent>
           </Card>
         </div>

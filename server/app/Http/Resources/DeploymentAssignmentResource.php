@@ -23,6 +23,7 @@ class DeploymentAssignmentResource extends JsonResource
             'status_label' => $this->status->label(),
             'remarks' => $this->remarks,
             'assigned_at' => $this->assigned_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
             'host_agency' => $this->whenLoaded('hostAgency', fn () => new HostAgencyResource($this->hostAgency)),
             'deployment_site' => $this->whenLoaded('deploymentSite', fn () => new DeploymentSiteResource($this->deploymentSite)),
             'deployment_slot' => $this->whenLoaded('deploymentSlot', fn () => new DeploymentSlotResource($this->deploymentSlot)),

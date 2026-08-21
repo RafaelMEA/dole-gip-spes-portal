@@ -19,6 +19,7 @@ import {
 import {
   deleteDocument,
   fetchApplication,
+  fetchApplicationHistory,
   submitApplication,
   updateApplication,
   uploadDocument,
@@ -43,7 +44,7 @@ import {
 } from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/PageHeader"
-import { StatusTimeline } from "@/components/StatusTimeline"
+import { HistoryFeed } from "@/components/HistoryTimeline"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { ApplicationStatusBadge, DeploymentStatusBadge, DocumentStatusBadge } from "@/components/StatusBadge"
 import { FullPageLoader } from "@/components/FullPageLoader"
@@ -442,7 +443,10 @@ export function StudentApplicationDetailPage() {
               <CardDescription>Track the progress of your application</CardDescription>
             </CardHeader>
             <CardContent>
-              <StatusTimeline items={application.status_history ?? []} />
+              <HistoryFeed
+                fetchPage={(page) => fetchApplicationHistory(applicationId, page)}
+                refreshKey={application.updated_at}
+              />
             </CardContent>
           </Card>
 

@@ -52,9 +52,9 @@ class DocumentController extends Controller
         );
 
         if ($request->validated('verification_status') === DocumentVerificationStatus::Verified->value) {
-            $document->verify($request->user()->id);
+            $document->verify($request->user());
         } else {
-            $document->reject($request->user()->id, (string) $request->validated('rejection_reason'));
+            $document->reject($request->user(), (string) $request->validated('rejection_reason'));
         }
 
         return new ApplicationDocumentResource($document->load(['requirement', 'verifiedBy']));

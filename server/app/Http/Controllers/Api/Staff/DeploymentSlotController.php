@@ -6,12 +6,16 @@ use App\Enums\DeploymentSlotStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDeploymentSlotRequest;
 use App\Http\Requests\UpdateDeploymentSlotRequest;
+use App\Http\Resources\AuditLogResource;
 use App\Http\Resources\DeploymentSlotResource;
+use App\Models\AuditLog;
 use App\Models\DeploymentSite;
 use App\Models\DeploymentSlot;
 use App\Models\HostAgency;
 use App\Models\ProgramCycle;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DeploymentSlotController extends Controller
 {
@@ -77,6 +81,25 @@ class DeploymentSlotController extends Controller
         return new DeploymentSlotResource($deploymentSlot);
     }
 
+    /**
+     * The audit history of this deployment slot, newest first. Read-only.
+     */
+    public function history(DeploymentSlot $deploymentSlot)
+    {
+        $this->authorize('view', $deploymentSlot);
+
+        $logs = AuditLog::query()
+            ->where('auditable_type', $deploymentSlot->getMorphClass())
+            ->where('auditable_id', $deploymentSlot->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(min(max(1, request()->integer('per_page', 25)), 100))
+            ->withQueryString();
+
+        return AuditLogResource::collection($logs);
+    }
+
     public function store(StoreDeploymentSlotRequest $request)
     {
         $this->authorize('create', DeploymentSlot::class);
@@ -97,7 +120,15 @@ class DeploymentSlotController extends Controller
             ], 422);
         }
 
-        $slot = DeploymentSlot::create($request->validated());
+        $slot = DB::transaction(function () use ($request) {
+            $slot = DeploymentSlot::create($request->validated());
+
+            AuditLogger::log('deployment_slot.created', $slot, null, $slot->only([
+                'program_cycle_id', 'deployment_site_id', 'title', 'description', 'capacity', 'status',
+            ]));
+
+            return $slot;
+        });
 
         return (new DeploymentSlotResource($slot->load(['programCycle', 'deploymentSite.hostAgency'])))
             ->response()
@@ -129,7 +160,16 @@ class DeploymentSlotController extends Controller
             }
         }
 
-        $deploymentSlot->update($data);
+        DB::transaction(function () use ($deploymentSlot, $data) {
+            $oldValues = $deploymentSlot->only(array_keys($data));
+
+            $deploymentSlot->update($data);
+
+            $changed = $deploymentSlot->only(array_keys($data));
+            if ($changed !== $oldValues) {
+                AuditLogger::log('deployment_slot.updated', $deploymentSlot, $oldValues, $changed);
+            }
+        });
 
         return new DeploymentSlotResource($deploymentSlot->load(['programCycle', 'deploymentSite.hostAgency']));
     }
@@ -143,7 +183,25 @@ class DeploymentSlotController extends Controller
         ]);
 
         $status = DeploymentSlotStatus::from($request->input('status'));
-        $deploymentSlot->update(['status' => $status]);
+
+        DB::transaction(function () use ($deploymentSlot, $status) {
+            $previous = $deploymentSlot->storedStatus()->value;
+
+            if ($previous === $status->value) {
+                return;
+            }
+
+            $deploymentSlot->update(['status' => $status]);
+
+            AuditLogger::log(
+                $status === DeploymentSlotStatus::Active
+                    ? 'deployment_slot.activated'
+                    : 'deployment_slot.deactivated',
+                $deploymentSlot,
+                ['status' => $previous],
+                ['status' => $status->value],
+            );
+        });
 
         return new DeploymentSlotResource($deploymentSlot->load(['programCycle', 'deploymentSite.hostAgency']));
     }

@@ -18,9 +18,9 @@ import {
 } from "lucide-react"
 import {
   assignDeployment,
-  cancelDeployment,
   fetchDeploymentOptions,
   fetchStaffApplication,
+  fetchStaffApplicationHistory,
   reviewApplication,
   updateDeploymentStatus,
 } from "@/api/staff"
@@ -29,7 +29,6 @@ import { useAsync } from "@/lib/useAsync"
 import { ApiError } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -43,7 +42,7 @@ import {
 } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/PageHeader"
-import { StatusTimeline } from "@/components/StatusTimeline"
+import { HistoryFeed } from "@/components/HistoryTimeline"
 import { ApplicationStatusBadge, DeploymentStatusBadge } from "@/components/StatusBadge"
 import { DocumentReview } from "@/components/staff/DocumentReview"
 import { FullPageLoader } from "@/components/FullPageLoader"
@@ -308,21 +307,27 @@ export function StaffApplicationDetailPage() {
       })
   }
 
-  function handleAgencyChange(agencyId: string) {
-    const agency = deployOptions?.host_agencies.find((a) => a.id === Number(agencyId)) ?? null
+  function handleAgencyChange(agencyId: string | null) {
+    const agency = agencyId
+      ? deployOptions?.host_agencies.find((a) => a.id === Number(agencyId)) ?? null
+      : null
     setSelectedAgency(agency)
     setSelectedSite(null)
     setSelectedSlot(null)
   }
 
-  function handleSiteChange(siteId: string) {
-    const site = selectedAgency?.deployment_sites.find((s) => s.id === Number(siteId)) ?? null
+  function handleSiteChange(siteId: string | null) {
+    const site = siteId
+      ? selectedAgency?.deployment_sites.find((s) => s.id === Number(siteId)) ?? null
+      : null
     setSelectedSite(site)
     setSelectedSlot(null)
   }
 
-  function handleSlotChange(slotId: string) {
-    const slot = selectedSite?.slots.find((s) => s.id === Number(slotId)) ?? null
+  function handleSlotChange(slotId: string | null) {
+    const slot = slotId
+      ? selectedSite?.slots.find((s) => s.id === Number(slotId)) ?? null
+      : null
     setSelectedSlot(slot)
   }
 
@@ -493,10 +498,14 @@ export function StaffApplicationDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Status history</CardTitle>
+              <CardTitle>Application history</CardTitle>
             </CardHeader>
             <CardContent>
-              <StatusTimeline items={application.status_history ?? []} />
+              <HistoryFeed
+                fetchPage={(page) => fetchStaffApplicationHistory(applicationId, page)}
+                showChanges
+                refreshKey={application.updated_at}
+              />
             </CardContent>
           </Card>
         </div>

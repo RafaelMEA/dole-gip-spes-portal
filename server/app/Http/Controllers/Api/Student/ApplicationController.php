@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Api\Student;
 
+use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
 use App\Exceptions\IncompleteApplicationException;
 use App\Http\Requests\StoreApplicationRequest;
 use App\Http\Requests\UpdateApplicationRequest;
+use App\Http\Resources\ApplicationHistoryEventResource;
 use App\Http\Resources\ApplicationResource;
 use App\Models\Application;
 use App\Services\ApplicationCompletenessService;
+use App\Services\ApplicationHistoryService;
 use App\Services\ApplicationService;
 use DomainException;
 use Illuminate\Http\Request;
@@ -19,6 +22,7 @@ class ApplicationController extends Controller
     public function __construct(
         private readonly ApplicationService $applications,
         private readonly ApplicationCompletenessService $completeness,
+        private readonly ApplicationHistoryService $history,
     ) {}
 
     /**
@@ -103,14 +107,24 @@ class ApplicationController extends Controller
     }
 
     /**
-     * Submit a draft application for review.
+     * Submit a draft application for review. Re-submitting after a correction
+     * request is recorded as a distinct "resubmit" event in the history.
      */
     public function submit(Application $application, Request $request)
     {
         $this->authorize('submit', $application);
 
+        $isResubmission = in_array($application->status->value, [
+            ApplicationStatus::ReturnedForCorrection->value,
+            ApplicationStatus::DocumentsIncomplete->value,
+        ], true);
+
         try {
-            $this->applications->submit($application, $request->user(), $request->input('remarks'));
+            if ($isResubmission) {
+                $this->applications->resubmit($application, $request->user(), $request->input('remarks'));
+            } else {
+                $this->applications->submit($application, $request->user(), $request->input('remarks'));
+            }
         } catch (IncompleteApplicationException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -151,6 +165,25 @@ class ApplicationController extends Controller
         }
 
         return new ApplicationResource($application->load(['programCycle.program', 'statusHistory']));
+    }
+
+    /**
+     * The student-facing status history for one of the student's own
+     * applications. Internal audit details are excluded; students see each
+     * transition, when it happened, who performed it and any reason recorded
+     * for them.
+     */
+    public function history(Application $application, Request $request)
+    {
+        $this->authorize('view', $application);
+
+        $timeline = $this->history->studentTimeline(
+            $application,
+            page: $request->integer('page', 1),
+            perPage: $request->integer('per_page', ApplicationHistoryService::DEFAULT_PER_PAGE),
+        );
+
+        return ApplicationHistoryEventResource::collection($timeline);
     }
 
     /**

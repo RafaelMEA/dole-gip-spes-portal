@@ -5,6 +5,8 @@ import type {
   ApplicationCompleteness,
   ApplicationDocument,
   ApplicationSubmissionResponse,
+  Paginated,
+  AuditEvent,
   StudentDashboardData,
   StudentProfile,
 } from "@/types/api"
@@ -26,6 +28,17 @@ export async function fetchMyApplications(): Promise<Application[]> {
 export async function fetchApplication(id: number): Promise<Application> {
   const response = await apiRequest<ApiEnvelope<Application>>(`/api/student/applications/${id}`)
   return unwrap(response)
+}
+
+export async function fetchApplicationHistory(
+  id: number,
+  page = 1,
+  perPage = 25,
+): Promise<Paginated<AuditEvent>> {
+  const response = await apiRequest<Paginated<AuditEvent>>(
+    `/api/student/applications/${id}/history?page=${page}&per_page=${perPage}`,
+  )
+  return response
 }
 
 export async function fetchApplicationCompleteness(id: number): Promise<ApplicationCompleteness> {

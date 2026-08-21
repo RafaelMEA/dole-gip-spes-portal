@@ -54,7 +54,7 @@ class SecureDocumentUploadTest extends TestCase
 
         // A staff member already verified the original file...
         $staff = User::factory()->staff()->create();
-        $document->verify($staff->id);
+        $document->verify($staff);
         $this->assertSame('verified', $document->fresh()->verification_status->value);
 
         // ...and the student replaces it with a new file.

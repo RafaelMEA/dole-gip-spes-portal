@@ -7,6 +7,7 @@ use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Resources\ApplicationDocumentResource;
 use App\Models\Application;
 use App\Models\ApplicationDocument;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
@@ -48,7 +49,7 @@ class DocumentController extends Controller
         $storedPath = $this->storeFile($file, $application);
 
         try {
-            [$document, $previousPath] = DB::transaction(function () use ($application, $file, $requirementId, $storedPath) {
+            [$document, $previousPath, $previousValues] = DB::transaction(function () use ($application, $file, $requirementId, $storedPath) {
                 $existing = $application->documents()
                     ->where('requirement_id', $requirementId)
                     ->first();
@@ -67,9 +68,27 @@ class DocumentController extends Controller
 
                 if ($existing !== null) {
                     $previousPath = $existing->getOriginal('file_path');
+                    $previousValues = [
+                        'requirement_id' => $existing->requirement_id,
+                        'file_name' => $existing->file_name,
+                        'mime_type' => $existing->mime_type,
+                        'file_size' => $existing->file_size,
+                        'verification_status' => $existing->verification_status->value,
+                    ];
+
                     $existing->update($attributes);
 
-                    return [$existing, $previousPath];
+                    AuditLogger::log('document.replaced', $existing, $previousValues, [
+                        'requirement_id' => $requirementId,
+                        'file_name' => $attributes['file_name'],
+                        'mime_type' => $attributes['mime_type'],
+                        'file_size' => $attributes['file_size'],
+                        'verification_status' => 'pending',
+                    ], metadata: [
+                        'application_id' => $application->id,
+                    ]);
+
+                    return [$existing, $previousPath, null];
                 }
 
                 $document = $application->documents()->create([
@@ -77,7 +96,17 @@ class DocumentController extends Controller
                     ...$attributes,
                 ]);
 
-                return [$document, null];
+                AuditLogger::log('document.uploaded', $document, null, [
+                    'requirement_id' => $requirementId,
+                    'file_name' => $attributes['file_name'],
+                    'mime_type' => $attributes['mime_type'],
+                    'file_size' => $attributes['file_size'],
+                    'verification_status' => 'pending',
+                ], metadata: [
+                    'application_id' => $application->id,
+                ]);
+
+                return [$document, null, null];
             });
         } catch (Throwable $e) {
             Storage::disk('docs')->delete($storedPath);

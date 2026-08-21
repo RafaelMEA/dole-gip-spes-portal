@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/applications/{application}', [StudentApplicationController::class, 'update']);
         Route::patch('/applications/{application}', [StudentApplicationController::class, 'update']);
         Route::get('/applications/{application}/completeness', [StudentApplicationController::class, 'completeness']);
+        Route::get('/applications/{application}/history', [StudentApplicationController::class, 'history']);
         Route::post('/applications/{application}/submit', [StudentApplicationController::class, 'submit']);
         Route::post('/applications/{application}/withdraw', [StudentApplicationController::class, 'withdraw']);
         Route::delete('/applications/{application}', [StudentApplicationController::class, 'destroy']);
@@ -83,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/applications', [StaffApplicationController::class, 'index']);
         Route::get('/applications/{application}', [StaffApplicationController::class, 'show']);
+        Route::get('/applications/{application}/history', [StaffApplicationController::class, 'history']);
         Route::post('/applications/{application}/review', [StaffApplicationController::class, 'review']);
 
         Route::get('/applications/{application}/documents', [StaffDocumentController::class, 'index']);
@@ -90,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/deployments', [DeploymentController::class, 'index']);
         Route::get('/deployments/{assignment}', [DeploymentController::class, 'show']);
+        Route::get('/deployments/{assignment}/history', [DeploymentController::class, 'history']);
         Route::post('/deployments', [DeploymentController::class, 'store']);
         Route::patch('/deployments/{assignment}', [DeploymentController::class, 'update']);
         Route::patch('/deployments/{assignment}/cancel', [DeploymentController::class, 'cancel']);
@@ -100,6 +103,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/deployment-slots', [DeploymentSlotController::class, 'index']);
         Route::post('/deployment-slots', [DeploymentSlotController::class, 'store']);
         Route::get('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'show']);
+        Route::get('/deployment-slots/{deploymentSlot}/history', [DeploymentSlotController::class, 'history']);
         Route::put('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'update']);
         Route::patch('/deployment-slots/{deploymentSlot}', [DeploymentSlotController::class, 'update']);
         Route::patch('/deployment-slots/{deploymentSlot}/status', [DeploymentSlotController::class, 'updateStatus']);

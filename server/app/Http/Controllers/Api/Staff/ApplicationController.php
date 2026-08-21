@@ -6,9 +6,11 @@ use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ListApplicationsRequest;
 use App\Http\Requests\ReviewApplicationRequest;
+use App\Http\Resources\ApplicationHistoryEventResource;
 use App\Http\Resources\ApplicationResource;
 use App\Http\Resources\ApplicationResourceCollection;
 use App\Models\Application;
+use App\Services\ApplicationHistoryService;
 use App\Services\ApplicationService;
 use DomainException;
 use Illuminate\Http\Request;
@@ -17,6 +19,7 @@ class ApplicationController extends Controller
 {
     public function __construct(
         private readonly ApplicationService $applications,
+        private readonly ApplicationHistoryService $history,
     ) {
     }
 
@@ -137,6 +140,23 @@ class ApplicationController extends Controller
             'statusHistory.changedBy',
             'deploymentAssignment',
         ]));
+    }
+
+    /**
+     * The full audit timeline for one application: status transitions plus
+     * document and deployment events, newest first. Read-only.
+     */
+    public function history(Application $application, Request $request)
+    {
+        $this->authorize('view', $application);
+
+        $timeline = $this->history->staffTimeline(
+            $application,
+            page: $request->integer('page', 1),
+            perPage: $request->integer('per_page', ApplicationHistoryService::DEFAULT_PER_PAGE),
+        );
+
+        return ApplicationHistoryEventResource::collection($timeline);
     }
 
     /**

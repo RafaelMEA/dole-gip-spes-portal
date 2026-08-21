@@ -5,14 +5,18 @@ namespace App\Http\Controllers\Api\Staff;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssignDeploymentRequest;
 use App\Http\Requests\StoreDeploymentAssignmentRequest;
+use App\Http\Resources\AuditLogResource;
 use App\Http\Resources\DeploymentAssignmentResource;
 use App\Models\Application;
+use App\Models\AuditLog;
 use App\Models\DeploymentAssignment;
 use App\Models\DeploymentSlot;
 use App\Services\ApplicationService;
+use App\Services\AuditLogger;
 use App\Services\DeploymentAssignmentService;
 use DomainException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DeploymentController extends Controller
 {
@@ -76,6 +80,26 @@ class DeploymentController extends Controller
         ]);
 
         return new DeploymentAssignmentResource($assignment);
+    }
+
+    /**
+     * The audit history of this deployment assignment, newest first.
+     * Read-only.
+     */
+    public function history(DeploymentAssignment $assignment)
+    {
+        $this->authorize('view', $assignment);
+
+        $logs = AuditLog::query()
+            ->where('auditable_type', $assignment->getMorphClass())
+            ->where('auditable_id', $assignment->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(min(max(1, request()->integer('per_page', 25)), 100))
+            ->withQueryString();
+
+        return AuditLogResource::collection($logs);
     }
 
     public function deploymentOptions(Application $application)
@@ -143,18 +167,27 @@ class DeploymentController extends Controller
             ], 422);
         }
 
-        $assignment = DeploymentAssignment::create([
-            'application_id' => $application->id,
-            'host_agency_id' => $request->validated('host_agency_id'),
-            'deployment_site_id' => $request->input('deployment_site_id'),
-            'position' => $request->input('position'),
-            'start_date' => $request->validated('start_date'),
-            'end_date' => $request->input('end_date'),
-            'status' => $request->input('status', 'scheduled'),
-            'assigned_by' => $request->user()->id,
-            'assigned_at' => now(),
-            'remarks' => $request->input('remarks'),
-        ]);
+        $assignment = DB::transaction(function () use ($request, $application) {
+            $assignment = DeploymentAssignment::create([
+                'application_id' => $application->id,
+                'host_agency_id' => $request->validated('host_agency_id'),
+                'deployment_site_id' => $request->input('deployment_site_id'),
+                'position' => $request->input('position'),
+                'start_date' => $request->validated('start_date'),
+                'end_date' => $request->input('end_date'),
+                'status' => $request->input('status', 'scheduled'),
+                'assigned_by' => $request->user()->id,
+                'assigned_at' => now(),
+                'remarks' => $request->input('remarks'),
+            ]);
+
+            AuditLogger::log('assignment.created', $assignment, null, $assignment->only([
+                'application_id', 'deployment_slot_id', 'host_agency_id',
+                'deployment_site_id', 'position', 'start_date', 'status',
+            ]));
+
+            return $assignment;
+        });
 
         try {
             $this->applications->scheduleForDeployment($application, $request->user());
@@ -197,7 +230,20 @@ class DeploymentController extends Controller
             $application->save();
         }
 
-        $assignment->update(['status' => $status]);
+        DB::transaction(function () use ($assignment, $status) {
+            $previousStatus = $assignment->status->value;
+
+            $assignment->update(['status' => $status]);
+
+            if ($previousStatus !== $status) {
+                AuditLogger::log(
+                    $status === 'cancelled' ? 'assignment.cancelled' : 'assignment.status_changed',
+                    $assignment,
+                    ['status' => $previousStatus],
+                    ['status' => $status],
+                );
+            }
+        });
 
         return new DeploymentAssignmentResource($assignment->load([
             'hostAgency',

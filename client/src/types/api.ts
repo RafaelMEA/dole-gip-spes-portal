@@ -177,6 +177,7 @@ export interface DeploymentAssignment {
   status_label: string
   remarks: string | null
   assigned_at: string | null
+  updated_at?: string
   host_agency: HostAgency | null
   deployment_site: DeploymentSite | null
   deployment_slot: DeploymentSlot | null
@@ -380,3 +381,20 @@ export interface AssignmentFilters {
   page?: number
   per_page?: number
 }
+
+export type AuditEventSource = "status_history" | "audit_log"
+
+export interface AuditEvent {
+  id: number
+  source?: AuditEventSource
+  action: string
+  label: string
+  actor: string | null
+  occurred_at: string
+  reason: string | null
+  old_values?: Record<string, unknown> | null
+  new_values?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type HistoryPage = Paginated<AuditEvent>

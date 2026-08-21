@@ -28,7 +28,6 @@ import { EmptyState } from "@/components/EmptyState"
 import { PageHeader } from "@/components/PageHeader"
 import { useToast } from "@/toast/useToast"
 import type { DeploymentSlotFilters } from "@/types/api"
-import { formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const emptyForm: DeploymentSlotPayload = {

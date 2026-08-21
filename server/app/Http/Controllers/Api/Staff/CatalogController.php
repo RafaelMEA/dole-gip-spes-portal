@@ -21,7 +21,9 @@ use App\Models\HostAgency;
 use App\Models\Program;
 use App\Models\ProgramCycle;
 use App\Models\Requirement;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CatalogController extends Controller
 {
@@ -388,7 +390,15 @@ class CatalogController extends Controller
     {
         $this->authorize('create', HostAgency::class);
 
-        $agency = HostAgency::create($request->validated());
+        $agency = DB::transaction(function () use ($request) {
+            $agency = HostAgency::create($request->validated());
+
+            AuditLogger::log('host_agency.created', $agency, null, $agency->only([
+                'name', 'agency_type', 'address', 'contact_person', 'contact_number', 'email', 'is_active',
+            ]));
+
+            return $agency;
+        });
 
         return (new HostAgencyResource($agency))->response()->setStatusCode(201);
     }
@@ -397,7 +407,17 @@ class CatalogController extends Controller
     {
         $this->authorize('update', $agency);
 
-        $agency->update($request->validated());
+        DB::transaction(function () use ($agency, $request) {
+            $data = $request->validated();
+            $oldValues = $agency->only(array_keys($data));
+
+            $agency->update($data);
+
+            $changed = $agency->only(array_keys($data));
+            if ($changed !== $oldValues) {
+                AuditLogger::log('host_agency.updated', $agency, $oldValues, $changed);
+            }
+        });
 
         return new HostAgencyResource($agency);
     }
@@ -410,7 +430,23 @@ class CatalogController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $agency->update(['is_active' => $request->boolean('is_active')]);
+        DB::transaction(function () use ($agency, $request) {
+            $isActive = $request->boolean('is_active');
+            $previous = (bool) $agency->is_active;
+
+            if ($previous === $isActive) {
+                return;
+            }
+
+            $agency->update(['is_active' => $isActive]);
+
+            AuditLogger::log(
+                $isActive ? 'host_agency.activated' : 'host_agency.deactivated',
+                $agency,
+                ['is_active' => $previous],
+                ['is_active' => $isActive],
+            );
+        });
 
         return new HostAgencyResource($agency);
     }
@@ -477,7 +513,16 @@ class CatalogController extends Controller
     {
         $this->authorize('create', DeploymentSite::class);
 
-        $site = DeploymentSite::create($request->validated());
+        $site = DB::transaction(function () use ($request) {
+            $site = DeploymentSite::create($request->validated());
+
+            AuditLogger::log('deployment_site.created', $site, null, $site->only([
+                'host_agency_id', 'name', 'address', 'city', 'region',
+                'contact_person', 'contact_number', 'email', 'description', 'is_active',
+            ]));
+
+            return $site;
+        });
 
         return (new DeploymentSiteResource($site->load('hostAgency')))->response()->setStatusCode(201);
     }
@@ -486,7 +531,17 @@ class CatalogController extends Controller
     {
         $this->authorize('update', $site);
 
-        $site->update($request->validated());
+        DB::transaction(function () use ($site, $request) {
+            $data = $request->validated();
+            $oldValues = $site->only(array_keys($data));
+
+            $site->update($data);
+
+            $changed = $site->only(array_keys($data));
+            if ($changed !== $oldValues) {
+                AuditLogger::log('deployment_site.updated', $site, $oldValues, $changed);
+            }
+        });
 
         return new DeploymentSiteResource($site->load('hostAgency'));
     }
@@ -499,7 +554,23 @@ class CatalogController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $site->update(['is_active' => $request->boolean('is_active')]);
+        DB::transaction(function () use ($site, $request) {
+            $isActive = $request->boolean('is_active');
+            $previous = (bool) $site->is_active;
+
+            if ($previous === $isActive) {
+                return;
+            }
+
+            $site->update(['is_active' => $isActive]);
+
+            AuditLogger::log(
+                $isActive ? 'deployment_site.activated' : 'deployment_site.deactivated',
+                $site,
+                ['is_active' => $previous],
+                ['is_active' => $isActive],
+            );
+        });
 
         return new DeploymentSiteResource($site->load('hostAgency'));
     }

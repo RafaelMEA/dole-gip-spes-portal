@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'application_id', 'status', 'changed_by', 'remarks', 'changed_at',
+    'application_id', 'status', 'action', 'changed_by', 'remarks', 'changed_at',
 ])]
 class ApplicationStatusHistory extends Model
 {

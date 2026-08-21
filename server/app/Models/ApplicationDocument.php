@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Enums\DocumentVerificationStatus;
+use App\Services\AuditLogger;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 #[Fillable([
     'application_id', 'file_path', 'file_name', 'verified_by', 'verified_at',
@@ -54,28 +56,50 @@ class ApplicationDocument extends Model
      *
      * A verified document can never carry a rejection reason; any previous
      * rejection reason is cleared so the record cannot end up in a
-     * contradictory state.
+     * contradictory state. The status change and its audit entry are written
+     * atomically.
      */
-    public function verify(int $userId): void
+    public function verify(User $staff): void
     {
-        $this->update([
-            'verification_status' => DocumentVerificationStatus::Verified,
-            'verified_by' => $userId,
-            'verified_at' => now(),
-            'rejection_reason' => null,
-        ]);
+        DB::transaction(function () use ($staff) {
+            $previous = $this->verification_status->value;
+
+            $this->update([
+                'verification_status' => DocumentVerificationStatus::Verified,
+                'verified_by' => $staff->id,
+                'verified_at' => now(),
+                'rejection_reason' => null,
+            ]);
+
+            AuditLogger::log('document.verified', $this, [
+                'verification_status' => $previous,
+            ], [
+                'verification_status' => DocumentVerificationStatus::Verified->value,
+            ], actor: $staff);
+        });
     }
 
     /**
-     * Reject this document with a reason.
+     * Reject this document with a reason. The status change and its audit
+     * entry are written atomically.
      */
-    public function reject(int $userId, string $reason): void
+    public function reject(User $staff, string $reason): void
     {
-        $this->update([
-            'verification_status' => DocumentVerificationStatus::Rejected,
-            'verified_by' => $userId,
-            'verified_at' => now(),
-            'rejection_reason' => $reason,
-        ]);
+        DB::transaction(function () use ($staff, $reason) {
+            $previous = $this->verification_status->value;
+
+            $this->update([
+                'verification_status' => DocumentVerificationStatus::Rejected,
+                'verified_by' => $staff->id,
+                'verified_at' => now(),
+                'rejection_reason' => $reason,
+            ]);
+
+            AuditLogger::log('document.rejected', $this, [
+                'verification_status' => $previous,
+            ], [
+                'verification_status' => DocumentVerificationStatus::Rejected->value,
+            ], reason: $reason, actor: $staff);
+        });
     }
 }

@@ -103,6 +103,7 @@ class ApplicationService
 
             $application->statusHistory()->create([
                 'status' => $application->status,
+                'action' => $action,
                 'changed_by' => $user->id,
                 'remarks' => $remarks,
                 'changed_at' => now(),

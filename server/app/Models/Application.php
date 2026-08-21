@@ -84,10 +84,11 @@ class Application extends Model
     /**
      * Log a status transition in the history table.
      */
-    public function logStatusChange(?int $changedBy = null, ?string $remarks = null): void
+    public function logStatusChange(?int $changedBy = null, ?string $remarks = null, ?string $action = null): void
     {
         $this->statusHistory()->create([
             'status' => $this->status,
+            'action' => $action,
             'changed_by' => $changedBy,
             'remarks' => $remarks,
             'changed_at' => now(),

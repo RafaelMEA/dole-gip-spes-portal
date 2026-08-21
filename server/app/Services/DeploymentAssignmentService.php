@@ -170,6 +170,11 @@ class DeploymentAssignmentService
                 'assigned_at' => now(),
             ]);
 
+            AuditLogger::log('assignment.created', $assignment, null, $assignment->only([
+                'application_id', 'deployment_slot_id', 'host_agency_id',
+                'deployment_site_id', 'position', 'start_date', 'status',
+            ]), actor: $staff);
+
             // 9. Update application status to for_deployment
             try {
                 $appService = app(ApplicationService::class);
@@ -206,16 +211,24 @@ class DeploymentAssignmentService
                 throw new DomainException('A completed or cancelled assignment cannot be cancelled.');
             }
 
+            $previousStatus = $lockedAssignment->status->value;
+
             $lockedAssignment->update([
                 'status' => 'cancelled',
                 'remarks' => $remarks ?? $lockedAssignment->remarks,
             ]);
 
+            AuditLogger::log('assignment.cancelled', $lockedAssignment, [
+                'status' => $previousStatus,
+            ], [
+                'status' => 'cancelled',
+            ], reason: $remarks, actor: $staff);
+
             // Revert application status to approved
             $application = $lockedAssignment->application;
             if (in_array($application->status->value, ['for_deployment', 'deployed'])) {
                 $application->update(['status' => ApplicationStatus::Approved]);
-                $application->logStatusChange($staff->id, 'Deployment assignment cancelled.');
+                $application->logStatusChange($staff->id, 'Deployment assignment cancelled.', 'assignment_cancelled');
             }
 
             return $lockedAssignment->load([
