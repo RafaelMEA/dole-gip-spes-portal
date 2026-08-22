@@ -46,3 +46,37 @@ export function formatRelative(value: string | null | undefined): string {
   if (absDays < 7) return `${future ? "in " : ""}${absDays} day${absDays > 1 ? "s" : ""}${future ? "" : " ago"}`
   return formatDate(value)
 }
+
+/**
+ * Badge text for an unread-notification count: null hides the badge,
+ * anything above 99 collapses to "99+".
+ */
+export function formatBadgeCount(count: number): string | null {
+  if (count <= 0) return null
+  if (count > 99) return "99+"
+  return String(count)
+}
+
+export function formatRelativeTime(value: string | null | undefined): string {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+
+  const secondsAgo = Math.floor((Date.now() - date.getTime()) / 1000)
+
+  if (secondsAgo < 60) return "Just now"
+  if (secondsAgo < 3_600) {
+    const minutes = Math.floor(secondsAgo / 60)
+    return `${minutes} minute${minutes === 1 ? "" : "s"} ago`
+  }
+  if (secondsAgo < 86_400) {
+    const hours = Math.floor(secondsAgo / 3_600)
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`
+  }
+  if (secondsAgo < 172_800) return "Yesterday"
+  if (secondsAgo < 7 * 86_400) {
+    const days = Math.floor(secondsAgo / 86_400)
+    return `${days} days ago`
+  }
+  return formatDateTime(value)
+}

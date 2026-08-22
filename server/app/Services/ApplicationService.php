@@ -3,6 +3,12 @@
 namespace App\Services;
 
 use App\Enums\ApplicationStatus;
+use App\Events\ApplicationApproved;
+use App\Events\ApplicationDocumentsRequested;
+use App\Events\ApplicationRejected;
+use App\Events\ApplicationResubmitted;
+use App\Events\ApplicationReturnedForCorrection;
+use App\Events\ApplicationSubmitted;
 use App\Exceptions\IncompleteApplicationException;
 use App\Models\Application;
 use App\Models\User;
@@ -13,8 +19,7 @@ class ApplicationService
 {
     public function __construct(
         private readonly ApplicationCompletenessService $completeness,
-    ) {
-    }
+    ) {}
 
     /**
      * The state machine: [from => [to, ...]].
@@ -109,8 +114,35 @@ class ApplicationService
                 'changed_at' => now(),
             ]);
 
+            // Fired inside the transaction so the workflow-notification
+            // listener commits or rolls back together with the state change.
+            $event = self::workflowEvent($action);
+            if ($event !== null) {
+                event(new $event($application, $user));
+            }
+
             return $application;
         });
+    }
+
+    /**
+     * The domain event announced by a successful workflow action, if any.
+     * Actions without user-facing impact (start_review, withdraw,
+     * schedule_deployment, deploy, complete) intentionally produce none.
+     *
+     * @return class-string|null
+     */
+    private static function workflowEvent(string $action): ?string
+    {
+        return match ($action) {
+            'submit' => ApplicationSubmitted::class,
+            'resubmit' => ApplicationResubmitted::class,
+            'request_documents' => ApplicationDocumentsRequested::class,
+            'return_for_correction' => ApplicationReturnedForCorrection::class,
+            'approve' => ApplicationApproved::class,
+            'reject' => ApplicationRejected::class,
+            default => null,
+        };
     }
 
     /**
@@ -174,14 +206,19 @@ class ApplicationService
     {
         $this->assertCanBeApproved($application);
 
-        $application = $this->transition($application, $user, 'approve', $remarks);
+        // One transaction for status, history, notification and approval
+        // metadata: the student's "approved" notification can only commit if
+        // the whole approval does.
+        return DB::transaction(function () use ($application, $user, $remarks) {
+            $application = $this->transition($application, $user, 'approve', $remarks);
 
-        $application->forceFill([
-            'approved_at' => now(),
-            'approved_by' => $user->id,
-        ])->save();
+            $application->forceFill([
+                'approved_at' => now(),
+                'approved_by' => $user->id,
+            ])->save();
 
-        return $application;
+            return $application;
+        });
     }
 
     public function reject(Application $application, User $user, string $remarks): Application
@@ -190,15 +227,17 @@ class ApplicationService
             throw new DomainException('A reason is required before rejecting an application.');
         }
 
-        $application = $this->transition($application, $user, 'reject', $remarks);
+        return DB::transaction(function () use ($application, $user, $remarks) {
+            $application = $this->transition($application, $user, 'reject', $remarks);
 
-        $application->forceFill([
-            'decision_reason' => $remarks,
-            'decided_by' => $user->id,
-            'decided_at' => now(),
-        ])->save();
+            $application->forceFill([
+                'decision_reason' => $remarks,
+                'decided_by' => $user->id,
+                'decided_at' => now(),
+            ])->save();
 
-        return $application;
+            return $application;
+        });
     }
 
     public function scheduleForDeployment(Application $application, User $user, ?string $remarks = null): Application

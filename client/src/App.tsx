@@ -27,6 +27,7 @@ import { StudentApplicationsPage } from "@/pages/student/Applications"
 import { StudentDashboardPage } from "@/pages/student/Dashboard"
 import { StudentProfilePage } from "@/pages/student/Profile"
 import { StudentProgramsPage } from "@/pages/student/Programs"
+import { NotificationsPage } from "@/pages/shared/Notifications"
 
 function RoleDashboardRedirect() {
   const { user } = useAuth()
@@ -67,6 +68,7 @@ function App() {
           <Route path="/student/applications" element={<StudentApplicationsPage />} />
           <Route path="/student/applications/:id" element={<StudentApplicationDetailPage />} />
           <Route path="/student/applications/:id/review" element={<StudentApplicationReviewPage />} />
+          <Route path="/student/notifications" element={<NotificationsPage />} />
           <Route path="/student/profile" element={<StudentProfilePage />} />
         </Route>
 
@@ -89,6 +91,7 @@ function App() {
           <Route path="/staff/deployment-slots" element={<StaffDeploymentSlotsPage />} />
           <Route path="/staff/deployment-slots/:id" element={<StaffDeploymentSlotDetailPage />} />
           <Route path="/staff/deployments" element={<StaffDeploymentsPage />} />
+          <Route path="/staff/notifications" element={<NotificationsPage />} />
           <Route path="/staff/catalog" element={<StaffCatalogPage />} />
         </Route>
 

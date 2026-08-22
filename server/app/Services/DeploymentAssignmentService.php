@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\DeploymentAssignmentStatus;
+use App\Events\DeploymentAssignmentCancelled;
+use App\Events\DeploymentAssignmentCreated;
 use App\Models\Application;
 use App\Models\DeploymentAssignment;
 use App\Models\DeploymentSlot;
+use App\Models\HostAgency;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +27,7 @@ class DeploymentAssignmentService
 
         $programCycleId = $application->program_cycle_id;
 
-        $hostAgencies = \App\Models\HostAgency::query()
+        $hostAgencies = HostAgency::query()
             ->where('is_active', true)
             ->whereHas('deploymentSites', function ($query) use ($programCycleId) {
                 $query->where('is_active', true)
@@ -66,6 +70,7 @@ class DeploymentAssignmentService
                             'name' => $site->name,
                             'slots' => $site->deploymentSlots->map(function ($slot) {
                                 $assignedCount = $slot->active_assignments_count ?? 0;
+
                                 return [
                                     'id' => $slot->id,
                                     'title' => $slot->title,
@@ -183,6 +188,10 @@ class DeploymentAssignmentService
                 // Application may already be in a compatible state; assignment still stands.
             }
 
+            // Fired inside the transaction so the student's notification
+            // commits or rolls back together with the assignment.
+            event(new DeploymentAssignmentCreated($assignment, $staff));
+
             return $assignment->load([
                 'deploymentSlot.programCycle',
                 'deploymentSlot.deploymentSite',
@@ -207,7 +216,7 @@ class DeploymentAssignmentService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (in_array($lockedAssignment->status, [\App\Enums\DeploymentAssignmentStatus::Completed, \App\Enums\DeploymentAssignmentStatus::Cancelled])) {
+            if (in_array($lockedAssignment->status, [DeploymentAssignmentStatus::Completed, DeploymentAssignmentStatus::Cancelled])) {
                 throw new DomainException('A completed or cancelled assignment cannot be cancelled.');
             }
 
@@ -230,6 +239,10 @@ class DeploymentAssignmentService
                 $application->update(['status' => ApplicationStatus::Approved]);
                 $application->logStatusChange($staff->id, 'Deployment assignment cancelled.', 'assignment_cancelled');
             }
+
+            // Fired inside the transaction so the student's notification
+            // commits or rolls back together with the cancellation.
+            event(new DeploymentAssignmentCancelled($lockedAssignment, $staff));
 
             return $lockedAssignment->load([
                 'deploymentSlot.programCycle',
@@ -255,7 +268,7 @@ class DeploymentAssignmentService
         if (! in_array($application->status->value, $eligibleStatuses, true)) {
             throw new DomainException(
                 'Only approved applications can be assigned for deployment. Current status: '
-                . $application->status->value,
+                .$application->status->value,
             );
         }
 

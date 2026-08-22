@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DocumentDownloadController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramCycleController;
 use App\Http\Controllers\Api\Staff\ApplicationController as StaffApplicationController;
@@ -35,6 +36,16 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    /*
+    | In-app notification centre (shared by students and staff).
+    | Literal paths are registered before the {notification} routes.
+    */
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
     /*
     | Shared browsing

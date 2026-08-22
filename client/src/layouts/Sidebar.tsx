@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, NavLink, useNavigate } from "react-router-dom"
 import {
+  Bell,
   Building,
   Building2,
   CalendarRange,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/auth/useAuth"
 import { Button } from "@/components/ui/button"
+import { NotificationBell } from "@/components/notifications/NotificationBell"
 import { homePathForRole } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/toast/useToast"
@@ -39,11 +41,12 @@ export function Sidebar() {
   const dashboardPath = user ? homePathForRole(user.role) : "/dashboard"
 
   const navItems: NavItem[] = user
-    ? user.role === "student"
+    ?     user.role === "student"
       ? [
           { to: dashboardPath, label: "Dashboard", icon: LayoutDashboard, end: true },
           { to: "/student/programs", label: "Programs", icon: CalendarRange },
           { to: "/student/applications", label: "My applications", icon: FileText },
+          { to: "/student/notifications", label: "Notifications", icon: Bell },
           { to: "/student/profile", label: "Profile", icon: User },
         ]
       : [
@@ -54,6 +57,7 @@ export function Sidebar() {
           { to: "/staff/deployment-slots", label: "Deployment slots", icon: Rows3 },
           { to: "/staff/deployments", label: "Deployments", icon: Building2 },
           { to: "/staff/catalog", label: "Catalog", icon: Library },
+          { to: "/staff/notifications", label: "Notifications", icon: Bell },
         ]
     : []
 
@@ -84,6 +88,9 @@ export function Sidebar() {
           />
           <span className="text-sm font-semibold">DOLE GIP / SPES Portal</span>
         </Link>
+        <div className="ml-auto flex items-center gap-1">
+          <NotificationBell />
+        </div>
       </header>
 
       {open ? (
@@ -110,15 +117,18 @@ export function Sidebar() {
             />
             <span className="truncate text-sm font-semibold">DOLE GIP / SPES Portal</span>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={close}
-            aria-label="Close navigation"
-          >
-            <X aria-hidden="true" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={close}
+              aria-label="Close navigation"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
